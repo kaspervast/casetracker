@@ -327,6 +327,12 @@ p {
   margin-bottom: 0;
 }
 
+.record .case-meta {
+  color: #475569;
+  font-size: 13px;
+  margin-top: 6px;
+}
+
 .badges {
   display: flex;
   flex-wrap: wrap;
@@ -348,6 +354,24 @@ p {
   background: #fff1f2;
   border-color: #fecdd3;
   color: #be123c;
+}
+
+.badge.warning {
+  background: #fff7ed;
+  border-color: #fed7aa;
+  color: #c2410c;
+}
+
+.badge.notice {
+  background: #fffbeb;
+  border-color: #fde68a;
+  color: #a16207;
+}
+
+.badge.success {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+  color: #15803d;
 }
 
 .empty {

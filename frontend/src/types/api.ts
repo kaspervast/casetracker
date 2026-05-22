@@ -14,6 +14,10 @@ export type CaseRecord = {
   city?: string | null;
   case_title: string;
   case_type?: string | null;
+  primary_legal_act?: string | null;
+  sections_acts_applied?: string | null;
+  date_of_registration?: string | null;
+  pending_limit_days: number;
   case_status: string;
   priority: string;
   short_summary?: string | null;

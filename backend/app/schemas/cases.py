@@ -12,8 +12,10 @@ class CaseBase(BaseModel):
     city: str | None = None
     case_title: str = Field(min_length=1, max_length=255)
     case_type: str | None = None
+    primary_legal_act: str | None = None
     sections_acts_applied: str | None = None
     date_of_registration: date | None = None
+    pending_limit_days: int = 30
     incident_datetime: datetime | None = None
     reporting_datetime: datetime | None = None
     complainant_summary: str | None = None
@@ -38,8 +40,10 @@ class CaseUpdate(BaseModel):
     city: str | None = None
     case_title: str | None = None
     case_type: str | None = None
+    primary_legal_act: str | None = None
     sections_acts_applied: str | None = None
     date_of_registration: date | None = None
+    pending_limit_days: int | None = None
     incident_datetime: datetime | None = None
     reporting_datetime: datetime | None = None
     complainant_summary: str | None = None
