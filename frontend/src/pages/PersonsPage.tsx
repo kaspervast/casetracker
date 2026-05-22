@@ -9,6 +9,8 @@ export function PersonsPage() {
   const [fatherName, setFatherName] = useState("");
   const [error, setError] = useState("");
   const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [editing, setEditing] = useState<PersonRecord | null>(null);
+  const [editForm, setEditForm] = useState<Record<string, string>>({});
 
   async function load() {
     setPersons(await listPersons());
@@ -43,23 +45,35 @@ export function PersonsPage() {
     }
   }
 
-  async function editPerson(person: PersonRecord) {
-    const fullName = window.prompt("Full name", person.full_name);
-    if (fullName === null) return;
-    const fatherName = window.prompt("Father name", person.father_name ?? "");
-    if (fatherName === null) return;
-    const riskLevel = window.prompt("Risk level", person.risk_level);
-    if (riskLevel === null) return;
-    const verificationStatus = window.prompt("Verification status", person.verification_status);
-    if (verificationStatus === null) return;
+  function startEdit(person: PersonRecord) {
+    setEditing(person);
+    setEditForm({
+      full_name: person.full_name,
+      alias_or_nickname: person.alias_or_nickname ?? "",
+      father_name: person.father_name ?? "",
+      risk_level: person.risk_level,
+      verification_status: person.verification_status,
+      is_absconding: String(person.is_absconding),
+      is_arrested: String(person.is_arrested)
+    });
+  }
+
+  async function saveEdit(event: FormEvent) {
+    event.preventDefault();
+    if (!editing) return;
     setError("");
     try {
-      await updatePerson(person.id, {
-        full_name: fullName.trim(),
-        father_name: fatherName.trim() || null,
-        risk_level: riskLevel.trim(),
-        verification_status: verificationStatus.trim()
+      await updatePerson(editing.id, {
+        full_name: editForm.full_name?.trim(),
+        alias_or_nickname: editForm.alias_or_nickname?.trim() || null,
+        father_name: editForm.father_name?.trim() || null,
+        risk_level: editForm.risk_level?.trim() || "Unknown",
+        verification_status: editForm.verification_status?.trim() || "Unverified",
+        is_absconding: editForm.is_absconding === "true",
+        is_arrested: editForm.is_arrested === "true"
       });
+      setEditing(null);
+      setEditForm({});
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Person update failed");
@@ -79,6 +93,30 @@ export function PersonsPage() {
         <input placeholder="Father name" value={fatherName} onChange={(event) => setFatherName(event.target.value)} />
         <button className="primary">Create Person</button>
       </form>
+      {editing && (
+        <form className="edit-panel" onSubmit={saveEdit}>
+          <h2>Edit Person</h2>
+          <div className="edit-grid">
+            <input placeholder="Full name" value={editForm.full_name ?? ""} onChange={(event) => setEditForm({ ...editForm, full_name: event.target.value })} />
+            <input placeholder="Alias or nickname" value={editForm.alias_or_nickname ?? ""} onChange={(event) => setEditForm({ ...editForm, alias_or_nickname: event.target.value })} />
+            <input placeholder="Father name" value={editForm.father_name ?? ""} onChange={(event) => setEditForm({ ...editForm, father_name: event.target.value })} />
+            <input placeholder="Risk level" value={editForm.risk_level ?? ""} onChange={(event) => setEditForm({ ...editForm, risk_level: event.target.value })} />
+            <input placeholder="Verification status" value={editForm.verification_status ?? ""} onChange={(event) => setEditForm({ ...editForm, verification_status: event.target.value })} />
+            <select value={editForm.is_absconding ?? "false"} onChange={(event) => setEditForm({ ...editForm, is_absconding: event.target.value })}>
+              <option value="false">Not absconding</option>
+              <option value="true">Absconding</option>
+            </select>
+            <select value={editForm.is_arrested ?? "false"} onChange={(event) => setEditForm({ ...editForm, is_arrested: event.target.value })}>
+              <option value="false">Not arrested</option>
+              <option value="true">Arrested</option>
+            </select>
+          </div>
+          <div className="form-actions">
+            <button className="primary">Save Changes</button>
+            <button className="secondary-button" type="button" onClick={() => setEditing(null)}>Cancel</button>
+          </div>
+        </form>
+      )}
       {error && <div className="error">{error}</div>}
       <div className="records">
         {persons.map((person) => (
@@ -99,7 +137,7 @@ export function PersonsPage() {
               <span className="badge">{person.risk_level}</span>
               <span className="badge">{person.verification_status}</span>
               {person.is_arrested && <span className="badge danger">Arrested</span>}
-              <button className="secondary-button" type="button" onClick={() => editPerson(person)}>
+              <button className="secondary-button" type="button" onClick={() => startEdit(person)}>
                 Edit
               </button>
               <button className="danger-button" type="button" onClick={() => removePerson(person)}>

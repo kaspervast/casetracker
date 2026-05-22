@@ -10,6 +10,8 @@ export function MobileNumbersPage() {
   const [provider, setProvider] = useState("");
   const [error, setError] = useState("");
   const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [editing, setEditing] = useState<MobileNumberRecord | null>(null);
+  const [editForm, setEditForm] = useState<Record<string, string>>({});
 
   async function load() {
     setMobiles(await listMobileNumbers());
@@ -52,23 +54,37 @@ export function MobileNumbersPage() {
     }
   }
 
-  async function editMobile(mobile: MobileNumberRecord) {
-    const mobileNumber = window.prompt("Mobile number", mobile.mobile_number);
-    if (mobileNumber === null) return;
-    const subscriber = window.prompt("Subscriber name", mobile.subscriber_name ?? "");
-    if (subscriber === null) return;
-    const provider = window.prompt("SIM provider", mobile.sim_provider ?? "");
-    if (provider === null) return;
-    const status = window.prompt("Current status", mobile.current_status);
-    if (status === null) return;
+  function startEdit(mobile: MobileNumberRecord) {
+    setEditing(mobile);
+    setEditForm({
+      mobile_number: mobile.mobile_number,
+      country_code: mobile.country_code,
+      subscriber_name: mobile.subscriber_name ?? "",
+      sim_provider: mobile.sim_provider ?? "",
+      current_status: mobile.current_status,
+      source: mobile.source ?? "",
+      verification_status: mobile.verification_status,
+      notes: mobile.notes ?? ""
+    });
+  }
+
+  async function saveEdit(event: FormEvent) {
+    event.preventDefault();
+    if (!editing) return;
     setError("");
     try {
-      await updateMobileNumber(mobile.id, {
-        mobile_number: mobileNumber.trim(),
-        subscriber_name: subscriber.trim() || null,
-        sim_provider: provider.trim() || null,
-        current_status: status.trim()
+      await updateMobileNumber(editing.id, {
+        mobile_number: editForm.mobile_number?.trim(),
+        country_code: editForm.country_code?.trim() || "+91",
+        subscriber_name: editForm.subscriber_name?.trim() || null,
+        sim_provider: editForm.sim_provider?.trim() || null,
+        current_status: editForm.current_status?.trim() || "Unknown",
+        source: editForm.source?.trim() || null,
+        verification_status: editForm.verification_status?.trim() || "Unverified",
+        notes: editForm.notes?.trim() || null
       });
+      setEditing(null);
+      setEditForm({});
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Mobile number update failed");
@@ -89,6 +105,25 @@ export function MobileNumbersPage() {
         <input placeholder="SIM provider" value={provider} onChange={(event) => setProvider(event.target.value)} />
         <button className="primary">Create Mobile Number</button>
       </form>
+      {editing && (
+        <form className="edit-panel" onSubmit={saveEdit}>
+          <h2>Edit Mobile Number</h2>
+          <div className="edit-grid">
+            <input placeholder="Mobile number" value={editForm.mobile_number ?? ""} onChange={(event) => setEditForm({ ...editForm, mobile_number: event.target.value })} />
+            <input placeholder="Country code" value={editForm.country_code ?? ""} onChange={(event) => setEditForm({ ...editForm, country_code: event.target.value })} />
+            <input placeholder="Subscriber name" value={editForm.subscriber_name ?? ""} onChange={(event) => setEditForm({ ...editForm, subscriber_name: event.target.value })} />
+            <input placeholder="SIM provider" value={editForm.sim_provider ?? ""} onChange={(event) => setEditForm({ ...editForm, sim_provider: event.target.value })} />
+            <input placeholder="Current status" value={editForm.current_status ?? ""} onChange={(event) => setEditForm({ ...editForm, current_status: event.target.value })} />
+            <input placeholder="Source" value={editForm.source ?? ""} onChange={(event) => setEditForm({ ...editForm, source: event.target.value })} />
+            <input placeholder="Verification status" value={editForm.verification_status ?? ""} onChange={(event) => setEditForm({ ...editForm, verification_status: event.target.value })} />
+            <input placeholder="Notes" value={editForm.notes ?? ""} onChange={(event) => setEditForm({ ...editForm, notes: event.target.value })} />
+          </div>
+          <div className="form-actions">
+            <button className="primary">Save Changes</button>
+            <button className="secondary-button" type="button" onClick={() => setEditing(null)}>Cancel</button>
+          </div>
+        </form>
+      )}
       {error && <div className="error">{error}</div>}
       <div className="records">
         {mobiles.map((mobile) => (
@@ -109,7 +144,7 @@ export function MobileNumbersPage() {
             <div className="badges">
               <span className="badge">{mobile.current_status}</span>
               <span className="badge">{mobile.verification_status}</span>
-              <button className="secondary-button" type="button" onClick={() => editMobile(mobile)}>
+              <button className="secondary-button" type="button" onClick={() => startEdit(mobile)}>
                 Edit
               </button>
               <button className="danger-button" type="button" onClick={() => removeMobile(mobile)}>

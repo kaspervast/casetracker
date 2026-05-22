@@ -9,6 +9,8 @@ export function CasesPage() {
   const [caseTitle, setCaseTitle] = useState("");
   const [error, setError] = useState("");
   const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [editing, setEditing] = useState<CaseRecord | null>(null);
+  const [editForm, setEditForm] = useState<Record<string, string>>({});
 
   async function load() {
     setCases(await listCases());
@@ -49,23 +51,41 @@ export function CasesPage() {
     }
   }
 
-  async function editCase(item: CaseRecord) {
-    const caseNumber = window.prompt("FIR/CR number", item.case_number);
-    if (caseNumber === null) return;
-    const caseTitle = window.prompt("Case title", item.case_title);
-    if (caseTitle === null) return;
-    const priority = window.prompt("Priority", item.priority);
-    if (priority === null) return;
-    const caseStatus = window.prompt("Status", item.case_status);
-    if (caseStatus === null) return;
+  function startEdit(item: CaseRecord) {
+    setEditing(item);
+    setEditForm({
+      case_number: item.case_number,
+      case_title: item.case_title,
+      police_station: item.police_station ?? "",
+      district: item.district ?? "",
+      city: item.city ?? "",
+      case_type: item.case_type ?? "",
+      case_status: item.case_status,
+      priority: item.priority,
+      confidentiality_level: item.confidentiality_level,
+      short_summary: item.short_summary ?? ""
+    });
+  }
+
+  async function saveEdit(event: FormEvent) {
+    event.preventDefault();
+    if (!editing) return;
     setError("");
     try {
-      await updateCase(item.id, {
-        case_number: caseNumber.trim(),
-        case_title: caseTitle.trim(),
-        priority: priority.trim(),
-        case_status: caseStatus.trim()
+      await updateCase(editing.id, {
+        case_number: editForm.case_number?.trim(),
+        case_title: editForm.case_title?.trim(),
+        police_station: editForm.police_station?.trim() || null,
+        district: editForm.district?.trim() || null,
+        city: editForm.city?.trim() || null,
+        case_type: editForm.case_type?.trim() || null,
+        priority: editForm.priority?.trim(),
+        case_status: editForm.case_status?.trim(),
+        confidentiality_level: editForm.confidentiality_level?.trim(),
+        short_summary: editForm.short_summary?.trim() || null
       });
+      setEditing(null);
+      setEditForm({});
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Case update failed");
@@ -85,6 +105,27 @@ export function CasesPage() {
         <input placeholder="Case title" value={caseTitle} onChange={(event) => setCaseTitle(event.target.value)} />
         <button className="primary">Create Case</button>
       </form>
+      {editing && (
+        <form className="edit-panel" onSubmit={saveEdit}>
+          <h2>Edit Case</h2>
+          <div className="edit-grid">
+            <input placeholder="FIR/CR number" value={editForm.case_number ?? ""} onChange={(event) => setEditForm({ ...editForm, case_number: event.target.value })} />
+            <input placeholder="Case title" value={editForm.case_title ?? ""} onChange={(event) => setEditForm({ ...editForm, case_title: event.target.value })} />
+            <input placeholder="Police station" value={editForm.police_station ?? ""} onChange={(event) => setEditForm({ ...editForm, police_station: event.target.value })} />
+            <input placeholder="District" value={editForm.district ?? ""} onChange={(event) => setEditForm({ ...editForm, district: event.target.value })} />
+            <input placeholder="City" value={editForm.city ?? ""} onChange={(event) => setEditForm({ ...editForm, city: event.target.value })} />
+            <input placeholder="Case type" value={editForm.case_type ?? ""} onChange={(event) => setEditForm({ ...editForm, case_type: event.target.value })} />
+            <input placeholder="Status" value={editForm.case_status ?? ""} onChange={(event) => setEditForm({ ...editForm, case_status: event.target.value })} />
+            <input placeholder="Priority" value={editForm.priority ?? ""} onChange={(event) => setEditForm({ ...editForm, priority: event.target.value })} />
+            <input placeholder="Confidentiality" value={editForm.confidentiality_level ?? ""} onChange={(event) => setEditForm({ ...editForm, confidentiality_level: event.target.value })} />
+            <input placeholder="Short summary" value={editForm.short_summary ?? ""} onChange={(event) => setEditForm({ ...editForm, short_summary: event.target.value })} />
+          </div>
+          <div className="form-actions">
+            <button className="primary">Save Changes</button>
+            <button className="secondary-button" type="button" onClick={() => setEditing(null)}>Cancel</button>
+          </div>
+        </form>
+      )}
       {error && <div className="error">{error}</div>}
       <div className="records">
         {cases.map((item) => (
@@ -106,7 +147,7 @@ export function CasesPage() {
               <span className="badge">{item.case_status}</span>
               <span className="badge">{item.priority}</span>
               <span className="badge">{item.confidentiality_level}</span>
-              <button className="secondary-button" type="button" onClick={() => editCase(item)}>
+              <button className="secondary-button" type="button" onClick={() => startEdit(item)}>
                 Edit
               </button>
               <button className="danger-button" type="button" onClick={() => removeCase(item)}>
