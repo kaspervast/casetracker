@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -12,6 +12,10 @@ class MobileNumberBase(BaseModel):
     current_status: str = "Unknown"
     source: str | None = "Manual entry"
     verification_status: str = "Unverified"
+    cdr_reported: bool = False
+    cdr_reported_date: date | None = None
+    cdr_available: bool = False
+    brief_details: str | None = None
     notes: str | None = None
 
 
@@ -27,6 +31,10 @@ class MobileNumberUpdate(BaseModel):
     current_status: str | None = None
     source: str | None = None
     verification_status: str | None = None
+    cdr_reported: bool | None = None
+    cdr_reported_date: date | None = None
+    cdr_available: bool | None = None
+    brief_details: str | None = None
     notes: str | None = None
 
 

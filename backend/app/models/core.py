@@ -186,6 +186,10 @@ class MobileNumber(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, SoftDeleteMi
     verification_status: Mapped[str] = mapped_column(
         String(80), default="Unverified", nullable=False
     )
+    cdr_reported: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    cdr_reported_date: Mapped[date | None] = mapped_column(Date)
+    cdr_available: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    brief_details: Mapped[str | None] = mapped_column(Text)
     notes: Mapped[str | None] = mapped_column(Text)
 
 

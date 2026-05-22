@@ -34,6 +34,10 @@ MOBILE_UPDATE_FIELDS = {
     "current_status",
     "source",
     "verification_status",
+    "cdr_reported",
+    "cdr_reported_date",
+    "cdr_available",
+    "brief_details",
     "notes",
 }
 

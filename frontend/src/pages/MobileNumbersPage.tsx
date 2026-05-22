@@ -22,6 +22,10 @@ export function MobileNumbersPage() {
   const [subscriberName, setSubscriberName] = useState("");
   const [provider, setProvider] = useState("");
   const [linkedPersonId, setLinkedPersonId] = useState("");
+  const [cdrReported, setCdrReported] = useState("false");
+  const [cdrReportedDate, setCdrReportedDate] = useState("");
+  const [cdrAvailable, setCdrAvailable] = useState("false");
+  const [briefDetails, setBriefDetails] = useState("");
   const [error, setError] = useState("");
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [editing, setEditing] = useState<MobileNumberRecord | null>(null);
@@ -73,7 +77,11 @@ export function MobileNumbersPage() {
         subscriber_name: subscriberName || null,
         sim_provider: provider || null,
         current_status: "Unknown",
-        source: "Manual entry"
+        source: "Manual entry",
+        cdr_reported: cdrReported === "true",
+        cdr_reported_date: cdrReportedDate || null,
+        cdr_available: cdrAvailable === "true",
+        brief_details: briefDetails.trim() || null
       });
       if (linkedPersonId) {
         await createRelationship({
@@ -91,6 +99,10 @@ export function MobileNumbersPage() {
       setSubscriberName("");
       setProvider("");
       setLinkedPersonId("");
+      setCdrReported("false");
+      setCdrReportedDate("");
+      setCdrAvailable("false");
+      setBriefDetails("");
       await load(selectedCaseId);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Mobile number creation failed");
@@ -119,6 +131,10 @@ export function MobileNumbersPage() {
       current_status: mobile.current_status,
       source: mobile.source ?? "",
       verification_status: mobile.verification_status,
+      cdr_reported: String(mobile.cdr_reported),
+      cdr_reported_date: mobile.cdr_reported_date ?? "",
+      cdr_available: String(mobile.cdr_available),
+      brief_details: mobile.brief_details ?? "",
       notes: mobile.notes ?? ""
     });
   }
@@ -136,6 +152,10 @@ export function MobileNumbersPage() {
         current_status: editForm.current_status?.trim() || "Unknown",
         source: editForm.source?.trim() || null,
         verification_status: editForm.verification_status?.trim() || "Unverified",
+        cdr_reported: editForm.cdr_reported === "true",
+        cdr_reported_date: editForm.cdr_reported_date || null,
+        cdr_available: editForm.cdr_available === "true",
+        brief_details: editForm.brief_details?.trim() || null,
         notes: editForm.notes?.trim() || null
       });
       setEditing(null);
@@ -200,6 +220,16 @@ export function MobileNumbersPage() {
         </select>
         <input placeholder="Subscriber name" value={subscriberName} onChange={(event) => setSubscriberName(event.target.value)} />
         <input placeholder="SIM provider" value={provider} onChange={(event) => setProvider(event.target.value)} />
+        <select value={cdrReported} onChange={(event) => setCdrReported(event.target.value)}>
+          <option value="false">CDR not reported</option>
+          <option value="true">CDR reported</option>
+        </select>
+        <input type="date" value={cdrReportedDate} onChange={(event) => setCdrReportedDate(event.target.value)} />
+        <select value={cdrAvailable} onChange={(event) => setCdrAvailable(event.target.value)}>
+          <option value="false">CDR unavailable</option>
+          <option value="true">CDR available</option>
+        </select>
+        <input placeholder="Brief details about number" value={briefDetails} onChange={(event) => setBriefDetails(event.target.value)} />
         <button className="primary" disabled={!selectedCaseId}>Create Mobile Number</button>
       </form>
       {editing && (
@@ -213,6 +243,16 @@ export function MobileNumbersPage() {
             <input placeholder="Current status" value={editForm.current_status ?? ""} onChange={(event) => setEditForm({ ...editForm, current_status: event.target.value })} />
             <input placeholder="Source" value={editForm.source ?? ""} onChange={(event) => setEditForm({ ...editForm, source: event.target.value })} />
             <input placeholder="Verification status" value={editForm.verification_status ?? ""} onChange={(event) => setEditForm({ ...editForm, verification_status: event.target.value })} />
+            <select value={editForm.cdr_reported ?? "false"} onChange={(event) => setEditForm({ ...editForm, cdr_reported: event.target.value })}>
+              <option value="false">CDR not reported</option>
+              <option value="true">CDR reported</option>
+            </select>
+            <input type="date" value={editForm.cdr_reported_date ?? ""} onChange={(event) => setEditForm({ ...editForm, cdr_reported_date: event.target.value })} />
+            <select value={editForm.cdr_available ?? "false"} onChange={(event) => setEditForm({ ...editForm, cdr_available: event.target.value })}>
+              <option value="false">CDR unavailable</option>
+              <option value="true">CDR available</option>
+            </select>
+            <input placeholder="Brief details about number" value={editForm.brief_details ?? ""} onChange={(event) => setEditForm({ ...editForm, brief_details: event.target.value })} />
             <input placeholder="Notes" value={editForm.notes ?? ""} onChange={(event) => setEditForm({ ...editForm, notes: event.target.value })} />
           </div>
           <div className="form-actions">
@@ -240,10 +280,18 @@ export function MobileNumbersPage() {
               <h2>{mobile.subscriber_name ?? "Unknown subscriber"}</h2>
               <p>{mobile.sim_provider ?? "Provider not recorded"}</p>
               {person && <p>Linked person: {person.full_name}{person.case_role ? ` (${person.case_role})` : ""}</p>}
+              <p>
+                CDR reported: {mobile.cdr_reported ? "Yes" : "No"}
+                {mobile.cdr_reported_date ? ` on ${mobile.cdr_reported_date}` : ""}
+                {" | "}
+                CDR available: {mobile.cdr_available ? "Yes" : "No"}
+              </p>
+              {mobile.brief_details && <p>{mobile.brief_details}</p>}
             </div>
             <div className="badges">
               <span className="badge">{mobile.current_status}</span>
               <span className="badge">{mobile.verification_status}</span>
+              <span className="badge">{mobile.cdr_available ? "CDR available" : "CDR pending"}</span>
               {person?.case_role && <span className="badge">{person.case_role}</span>}
               <button className="secondary-button" type="button" onClick={() => startEdit(mobile)}>
                 Edit

@@ -50,6 +50,10 @@ export type MobileNumberRecord = {
   current_status: string;
   source?: string | null;
   verification_status: string;
+  cdr_reported: boolean;
+  cdr_reported_date?: string | null;
+  cdr_available: boolean;
+  brief_details?: string | null;
   notes?: string | null;
   created_at: string;
   updated_at: string;
