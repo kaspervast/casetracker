@@ -74,6 +74,15 @@ export type ChartDatum = {
   value: number;
 };
 
+export type PendingCaseDatum = {
+  id: string;
+  case_number: string;
+  case_title: string;
+  days_pending: number | null;
+  pending_limit_days: number;
+  date_of_registration?: string | null;
+};
+
 export type DashboardSummary = {
   total_cases: number;
   active_cases: number;
@@ -90,6 +99,7 @@ export type DashboardSummary = {
   cases_by_status?: ChartDatum[];
   cases_by_priority?: ChartDatum[];
   cases_by_pending_age?: ChartDatum[];
+  pending_cases?: PendingCaseDatum[];
   accused_arrest_status?: ChartDatum[];
   recent_cases: CaseRecord[];
   recent_audit_activity: Array<Record<string, string | null>>;

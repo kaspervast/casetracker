@@ -50,11 +50,32 @@ def dashboard(db: Session = Depends(get_db), user: User = Depends(get_current_us
             "No FIR date": 0,
         }
     )
+    pending_cases = []
     for case in cases:
         if not case.date_of_registration:
             pending_age_counts["No FIR date"] += 1
+            pending_cases.append(
+                {
+                    "id": case.id,
+                    "case_number": case.case_number,
+                    "case_title": case.case_title,
+                    "days_pending": None,
+                    "pending_limit_days": case.pending_limit_days,
+                    "date_of_registration": None,
+                }
+            )
             continue
         days_pending = max(0, (today - case.date_of_registration).days)
+        pending_cases.append(
+            {
+                "id": case.id,
+                "case_number": case.case_number,
+                "case_title": case.case_title,
+                "days_pending": days_pending,
+                "pending_limit_days": case.pending_limit_days,
+                "date_of_registration": case.date_of_registration,
+            }
+        )
         if days_pending <= 30:
             pending_age_counts["0-30 days"] += 1
         elif days_pending <= 45:
@@ -123,6 +144,11 @@ def dashboard(db: Session = Depends(get_db), user: User = Depends(get_current_us
             {"label": label, "value": pending_age_counts[label]}
             for label in ["0-30 days", "31-45 days", "46-60 days", "61-90 days", "90+ days", "No FIR date"]
         ],
+        pending_cases=sorted(
+            pending_cases,
+            key=lambda item: item["days_pending"] if item["days_pending"] is not None else -1,
+            reverse=True,
+        ),
         accused_arrest_status=[
             {"label": "Arrested", "value": accused_arrested},
             {"label": "Not arrested", "value": accused_not_arrested},

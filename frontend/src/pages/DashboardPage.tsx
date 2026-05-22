@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { dashboard } from "../api/casegraph";
 import type { Page } from "../App";
-import type { ChartDatum, DashboardSummary } from "../types/api";
+import type { ChartDatum, DashboardSummary, PendingCaseDatum } from "../types/api";
 
 type Props = {
   onNavigate: (page: Page) => void;
@@ -22,33 +22,56 @@ function countBy(items: string[]) {
   ).map(([label, value]) => ({ label, value }));
 }
 
-function pendingAgeFromRecentCases(cases: DashboardSummary["recent_cases"]) {
-  const buckets: Record<string, number> = {
-    "0-30 days": 0,
-    "31-45 days": 0,
-    "46-60 days": 0,
-    "61-90 days": 0,
-    "90+ days": 0,
-    "No FIR date": 0
-  };
-  for (const item of cases) {
-    if (!item.date_of_registration) {
-      buckets["No FIR date"] += 1;
-      continue;
-    }
-    const filedAt = new Date(`${item.date_of_registration}T00:00:00`);
-    if (Number.isNaN(filedAt.getTime())) {
-      buckets["No FIR date"] += 1;
-      continue;
-    }
-    const days = Math.max(0, Math.floor((Date.now() - filedAt.getTime()) / 86_400_000));
-    if (days <= 30) buckets["0-30 days"] += 1;
-    else if (days <= 45) buckets["31-45 days"] += 1;
-    else if (days <= 60) buckets["46-60 days"] += 1;
-    else if (days <= 90) buckets["61-90 days"] += 1;
-    else buckets["90+ days"] += 1;
-  }
-  return Object.entries(buckets).map(([label, value]) => ({ label, value }));
+function pendingCasesFromRecentCases(cases: DashboardSummary["recent_cases"]): PendingCaseDatum[] {
+  return cases
+    .map((item) => {
+      let daysPending: number | null = null;
+      if (item.date_of_registration) {
+        const filedAt = new Date(`${item.date_of_registration}T00:00:00`);
+        if (!Number.isNaN(filedAt.getTime())) {
+          daysPending = Math.max(0, Math.floor((Date.now() - filedAt.getTime()) / 86_400_000));
+        }
+      }
+      return {
+        id: item.id,
+        case_number: item.case_number,
+        case_title: item.case_title,
+        days_pending: daysPending,
+        pending_limit_days: item.pending_limit_days,
+        date_of_registration: item.date_of_registration
+      };
+    })
+    .sort((left, right) => (right.days_pending ?? -1) - (left.days_pending ?? -1));
+}
+
+function pendingCaseClassName(item: PendingCaseDatum) {
+  if (item.days_pending === null) return "pending-case-row";
+  if (item.days_pending >= item.pending_limit_days) return "pending-case-row danger";
+  if (item.days_pending >= Math.min(60, item.pending_limit_days * 0.75)) return "pending-case-row warning";
+  if (item.days_pending >= Math.min(30, item.pending_limit_days * 0.5)) return "pending-case-row notice";
+  return "pending-case-row success";
+}
+
+function PendingCasesCard({ items }: { items: PendingCaseDatum[] }) {
+  return (
+    <section className="chart-card pending-card">
+      <h2>Case Wise Pending Since FIR</h2>
+      <div className="pending-case-list">
+        {items.map((item) => (
+          <div className={pendingCaseClassName(item)} key={item.id}>
+            <div>
+              <strong>{item.case_number}</strong>
+              <span>{item.case_title}</span>
+            </div>
+            <strong>
+              {item.days_pending === null ? "FIR date pending" : `${item.days_pending} days pending`}
+            </strong>
+          </div>
+        ))}
+        {!items.length && <div className="empty compact-empty">No pending case data.</div>}
+      </div>
+    </section>
+  );
 }
 
 function BarChartCard({ title, items }: { title: string; items: ChartDatum[] }) {
@@ -127,7 +150,7 @@ export function DashboardPage({ onNavigate }: Props) {
     { label: "Closed", value: data.closed_cases }
   ];
   const casesByPriority = data.cases_by_priority ?? countBy(data.recent_cases.map((item) => item.priority));
-  const casesByPendingAge = data.cases_by_pending_age ?? pendingAgeFromRecentCases(data.recent_cases);
+  const pendingCases = data.pending_cases ?? pendingCasesFromRecentCases(data.recent_cases);
   const accusedArrestStatus = data.accused_arrest_status ?? [{ label: "Accused", value: data.total_accused }];
 
   const stats = [
@@ -164,7 +187,7 @@ export function DashboardPage({ onNavigate }: Props) {
       <div className="charts-grid">
         <BarChartCard title="Cases By Status" items={casesByStatus} />
         <BarChartCard title="Cases By Priority" items={casesByPriority} />
-        <BarChartCard title="Pending Since FIR Filed" items={casesByPendingAge} />
+        <PendingCasesCard items={pendingCases} />
         <DonutChartCard title="Accused Arrest Status" items={accusedArrestStatus} />
       </div>
       <div className="two-column">

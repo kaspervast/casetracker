@@ -348,6 +348,64 @@ p {
   width: 10px;
 }
 
+.pending-card {
+  align-content: start;
+}
+
+.pending-case-list {
+  display: grid;
+  gap: 10px;
+}
+
+.pending-case-row {
+  align-items: center;
+  background: #f8fafc;
+  border-left: 4px solid #94a3b8;
+  border-radius: 8px;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 10px 12px;
+}
+
+.pending-case-row div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.pending-case-row span {
+  color: #64748b;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pending-case-row > strong {
+  white-space: nowrap;
+}
+
+.pending-case-row.success {
+  border-left-color: #16a34a;
+}
+
+.pending-case-row.notice {
+  border-left-color: #ca8a04;
+}
+
+.pending-case-row.warning {
+  border-left-color: #ea580c;
+}
+
+.pending-case-row.danger {
+  border-left-color: #be123c;
+}
+
+.compact-empty {
+  padding: 0;
+}
+
 .stat {
   padding: 16px;
 }

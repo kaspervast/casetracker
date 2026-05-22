@@ -74,6 +74,15 @@ class ChartDatum(BaseModel):
     value: int
 
 
+class PendingCaseDatum(BaseModel):
+    id: uuid.UUID
+    case_number: str
+    case_title: str
+    days_pending: int | None
+    pending_limit_days: int
+    date_of_registration: date | None = None
+
+
 class DashboardSummary(BaseModel):
     total_cases: int
     active_cases: int
@@ -90,6 +99,7 @@ class DashboardSummary(BaseModel):
     cases_by_status: list[ChartDatum]
     cases_by_priority: list[ChartDatum]
     cases_by_pending_age: list[ChartDatum]
+    pending_cases: list[PendingCaseDatum]
     accused_arrest_status: list[ChartDatum]
     recent_cases: list[CaseOut]
     recent_audit_activity: list[dict[str, Any]]
