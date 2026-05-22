@@ -1,33 +1,62 @@
 import { FormEvent, useEffect, useState } from "react";
-import { createPerson, deletePerson, listPersons, updatePerson } from "../api/casegraph";
-import type { PersonRecord } from "../types/api";
+import { createPerson, deletePerson, listCases, listPersons, updatePerson } from "../api/casegraph";
+import type { CaseRecord, PersonRecord } from "../types/api";
 import { moveById } from "../utils/reorder";
 
+const personRoleOptions = ["Accused", "Suspect", "Complainant", "Witness", "Victim", "Other"];
+
 export function PersonsPage() {
+  const [cases, setCases] = useState<CaseRecord[]>([]);
+  const [selectedCaseId, setSelectedCaseId] = useState("");
   const [persons, setPersons] = useState<PersonRecord[]>([]);
   const [fullName, setFullName] = useState("");
   const [fatherName, setFatherName] = useState("");
+  const [personRole, setPersonRole] = useState("Witness");
   const [error, setError] = useState("");
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [editing, setEditing] = useState<PersonRecord | null>(null);
   const [editForm, setEditForm] = useState<Record<string, string>>({});
 
-  async function load() {
-    setPersons(await listPersons());
+  async function loadCasesContext() {
+    const items = await listCases();
+    setCases(items);
+    setSelectedCaseId((current) => current || items[0]?.id || "");
+  }
+
+  async function load(caseId: string) {
+    if (!caseId) {
+      setPersons([]);
+      return;
+    }
+    setPersons(await listPersons(caseId));
   }
 
   useEffect(() => {
-    load().catch((err) => setError(err.message));
+    loadCasesContext().catch((err) => setError(err.message));
   }, []);
+
+  useEffect(() => {
+    load(selectedCaseId).catch((err) => setError(err.message));
+  }, [selectedCaseId]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
+    if (!selectedCaseId) {
+      setError("Select a case before creating a person");
+      return;
+    }
     setError("");
     try {
-      await createPerson({ full_name: fullName, father_name: fatherName });
+      await createPerson({
+        case_id: selectedCaseId,
+        role: personRole,
+        full_name: fullName,
+        father_name: fatherName || null
+      });
       setFullName("");
       setFatherName("");
-      await load();
+      setPersonRole("Witness");
+      await load(selectedCaseId);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Person creation failed");
     }
@@ -39,7 +68,7 @@ export function PersonsPage() {
     setError("");
     try {
       await deletePerson(person.id, reason.trim());
-      await load();
+      await load(selectedCaseId);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Person delete failed");
     }
@@ -74,7 +103,7 @@ export function PersonsPage() {
       });
       setEditing(null);
       setEditForm({});
-      await load();
+      await load(selectedCaseId);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Person update failed");
     }
@@ -88,10 +117,27 @@ export function PersonsPage() {
 
   return (
     <section className="stack">
+      <div className="context-toolbar">
+        <select value={selectedCaseId} onChange={(event) => setSelectedCaseId(event.target.value)}>
+          {cases.map((item) => (
+            <option key={item.id} value={item.id}>
+              {item.case_number} - {item.case_title}
+            </option>
+          ))}
+        </select>
+        <p className="context-note">
+          People listed and created here are linked to the selected case.
+        </p>
+      </div>
       <form className="inline-form" onSubmit={submit}>
+        <select value={personRole} onChange={(event) => setPersonRole(event.target.value)}>
+          {personRoleOptions.map((role) => (
+            <option key={role} value={role}>{role}</option>
+          ))}
+        </select>
         <input placeholder="Full name" value={fullName} onChange={(event) => setFullName(event.target.value)} />
         <input placeholder="Father name" value={fatherName} onChange={(event) => setFatherName(event.target.value)} />
-        <button className="primary">Create Person</button>
+        <button className="primary" disabled={!selectedCaseId}>Create Person</button>
       </form>
       {editing && (
         <form className="edit-panel" onSubmit={saveEdit}>
@@ -134,6 +180,7 @@ export function PersonsPage() {
               <p>Father: {person.father_name ?? "Not recorded"}</p>
             </div>
             <div className="badges">
+              {person.case_role && <span className="badge">{person.case_role}</span>}
               <span className="badge">{person.risk_level}</span>
               <span className="badge">{person.verification_status}</span>
               {person.is_arrested && <span className="badge danger">Arrested</span>}
@@ -146,6 +193,7 @@ export function PersonsPage() {
             </div>
           </article>
         ))}
+        {!persons.length && <div className="empty">No persons linked to the selected case.</div>}
       </div>
     </section>
   );

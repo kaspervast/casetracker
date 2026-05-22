@@ -5,9 +5,9 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, require_case_access
 from app.db.session import get_db
-from app.models.core import BankAccount, MobileNumber, User
+from app.models.core import BankAccount, MobileNumber, Relationship, User
 from app.schemas.cases import DeleteRequest
 from app.schemas.assets import (
     BankAccountCreate,
@@ -22,10 +22,82 @@ from app.services.audit import write_audit
 router = APIRouter(tags=["assets"])
 
 
+def _asset_ids_for_case(db: Session, case_id: uuid.UUID, asset_type: str) -> set[uuid.UUID]:
+    rows = db.scalars(
+        select(Relationship).where(
+            Relationship.case_id == case_id,
+            Relationship.deleted_at.is_(None),
+            (Relationship.source_entity_type == asset_type)
+            | (Relationship.target_entity_type == asset_type),
+        )
+    )
+    ids: set[uuid.UUID] = set()
+    for relationship in rows:
+        if relationship.source_entity_type == asset_type:
+            ids.add(relationship.source_entity_id)
+        if relationship.target_entity_type == asset_type:
+            ids.add(relationship.target_entity_id)
+    return ids
+
+
+def _ensure_case_asset_relationship(
+    db: Session,
+    *,
+    case_id: uuid.UUID,
+    asset_type: str,
+    asset_id: uuid.UUID,
+    relationship_type: str,
+    user_id: uuid.UUID,
+) -> None:
+    existing = db.scalar(
+        select(Relationship).where(
+            Relationship.case_id == case_id,
+            Relationship.deleted_at.is_(None),
+            Relationship.source_entity_type == "case",
+            Relationship.source_entity_id == case_id,
+            Relationship.target_entity_type == asset_type,
+            Relationship.target_entity_id == asset_id,
+            Relationship.relationship_type == relationship_type,
+        )
+    )
+    if existing:
+        return
+    db.add(
+        Relationship(
+            source_entity_type="case",
+            source_entity_id=case_id,
+            target_entity_type=asset_type,
+            target_entity_id=asset_id,
+            relationship_type=relationship_type,
+            confidence="Confirmed",
+            source_of_relationship="Manual",
+            case_id=case_id,
+            created_by=user_id,
+            updated_by=user_id,
+        )
+    )
+
+
 @router.get("/mobile-numbers", response_model=list[MobileNumberOut])
 def list_mobile_numbers(
+    case_id: uuid.UUID | None = None,
     db: Session = Depends(get_db), user: User = Depends(get_current_user)
 ):
+    if case_id:
+        require_case_access(case_id, db, user)
+        asset_ids = _asset_ids_for_case(db, case_id, "mobile_number")
+        if not asset_ids:
+            return []
+        return list(
+            db.scalars(
+                select(MobileNumber)
+                .where(
+                    MobileNumber.deleted_at.is_(None),
+                    MobileNumber.id.in_(asset_ids),
+                )
+                .order_by(MobileNumber.updated_at.desc())
+            )
+        )
     return list(
         db.scalars(
             select(MobileNumber)
@@ -42,9 +114,21 @@ def create_mobile_number(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    mobile = MobileNumber(**payload.model_dump(), created_by=user.id, updated_by=user.id)
+    require_case_access(payload.case_id, db, user)
+    mobile = MobileNumber(
+        **payload.model_dump(exclude={"case_id"}), created_by=user.id, updated_by=user.id
+    )
     db.add(mobile)
     try:
+        db.flush()
+        _ensure_case_asset_relationship(
+            db,
+            case_id=payload.case_id,
+            asset_type="mobile_number",
+            asset_id=mobile.id,
+            relationship_type="HAS_MOBILE",
+            user_id=user.id,
+        )
         db.commit()
     except IntegrityError as exc:
         db.rollback()
@@ -57,6 +141,7 @@ def create_mobile_number(
         user=user,
         entity_type="mobile_number",
         entity_id=mobile.id,
+        case_id=payload.case_id,
         new_value=MobileNumberOut.model_validate(mobile).model_dump(mode="json"),
     )
     return mobile
@@ -124,8 +209,24 @@ def delete_mobile_number(
 
 @router.get("/bank-accounts", response_model=list[BankAccountOut])
 def list_bank_accounts(
+    case_id: uuid.UUID | None = None,
     db: Session = Depends(get_db), user: User = Depends(get_current_user)
 ):
+    if case_id:
+        require_case_access(case_id, db, user)
+        asset_ids = _asset_ids_for_case(db, case_id, "bank_account")
+        if not asset_ids:
+            return []
+        return list(
+            db.scalars(
+                select(BankAccount)
+                .where(
+                    BankAccount.deleted_at.is_(None),
+                    BankAccount.id.in_(asset_ids),
+                )
+                .order_by(BankAccount.updated_at.desc())
+            )
+        )
     return list(
         db.scalars(
             select(BankAccount)
@@ -142,9 +243,21 @@ def create_bank_account(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    account = BankAccount(**payload.model_dump(), created_by=user.id, updated_by=user.id)
+    require_case_access(payload.case_id, db, user)
+    account = BankAccount(
+        **payload.model_dump(exclude={"case_id"}), created_by=user.id, updated_by=user.id
+    )
     db.add(account)
     try:
+        db.flush()
+        _ensure_case_asset_relationship(
+            db,
+            case_id=payload.case_id,
+            asset_type="bank_account",
+            asset_id=account.id,
+            relationship_type="HAS_BANK_ACCOUNT",
+            user_id=user.id,
+        )
         db.commit()
     except IntegrityError as exc:
         db.rollback()
@@ -157,6 +270,7 @@ def create_bank_account(
         user=user,
         entity_type="bank_account",
         entity_id=account.id,
+        case_id=payload.case_id,
         new_value=BankAccountOut.model_validate(account).model_dump(mode="json"),
     )
     return account

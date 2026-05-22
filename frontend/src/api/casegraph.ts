@@ -25,6 +25,11 @@ export function dashboard() {
   return api<DashboardSummary>("/dashboard");
 }
 
+function withCaseId(path: string, caseId?: string) {
+  if (!caseId) return path;
+  return `${path}?case_id=${encodeURIComponent(caseId)}`;
+}
+
 export function listCases() {
   return api<CaseRecord[]>("/cases");
 }
@@ -47,8 +52,8 @@ export function deleteCase(caseId: string, deleteReason: string) {
   });
 }
 
-export function listPersons() {
-  return api<PersonRecord[]>("/persons");
+export function listPersons(caseId?: string) {
+  return api<PersonRecord[]>(withCaseId("/persons", caseId));
 }
 
 export function createPerson(payload: Record<string, unknown>) {
@@ -69,8 +74,8 @@ export function deletePerson(personId: string, deleteReason: string) {
   });
 }
 
-export function listMobileNumbers() {
-  return api<MobileNumberRecord[]>("/mobile-numbers");
+export function listMobileNumbers(caseId?: string) {
+  return api<MobileNumberRecord[]>(withCaseId("/mobile-numbers", caseId));
 }
 
 export function createMobileNumber(payload: Record<string, unknown>) {
@@ -94,8 +99,8 @@ export function deleteMobileNumber(mobileId: string, deleteReason: string) {
   });
 }
 
-export function listBankAccounts() {
-  return api<BankAccountRecord[]>("/bank-accounts");
+export function listBankAccounts(caseId?: string) {
+  return api<BankAccountRecord[]>(withCaseId("/bank-accounts", caseId));
 }
 
 export function createBankAccount(payload: Record<string, unknown>) {

@@ -25,7 +25,28 @@ def _accessible_person_ids(db: Session, user: User):
 
 
 @router.get("", response_model=list[PersonOut])
-def list_persons(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def list_persons(
+    case_id: uuid.UUID | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    if case_id:
+        require_case_access(case_id, db, user)
+        rows = db.execute(
+            select(Person, CasePersonRole.role)
+            .join(CasePersonRole, CasePersonRole.person_id == Person.id)
+            .where(
+                Person.deleted_at.is_(None),
+                CasePersonRole.case_id == case_id,
+            )
+            .order_by(Person.updated_at.desc())
+        )
+        return [
+            PersonOut.model_validate(person).model_copy(
+                update={"case_id": case_id, "case_role": role}
+            )
+            for person, role in rows
+        ]
     query = select(Person).where(Person.deleted_at.is_(None))
     query = query.where(Person.id.in_(_accessible_person_ids(db, user)))
     return list(db.scalars(query.order_by(Person.updated_at.desc())))
@@ -39,13 +60,11 @@ def create_person(
     user: User = Depends(get_current_user),
 ):
     data = payload.model_dump(exclude={"case_id", "role"})
-    if payload.case_id:
-        require_case_access(payload.case_id, db, user)
+    require_case_access(payload.case_id, db, user)
     person = Person(**data, created_by=user.id, updated_by=user.id)
     db.add(person)
     db.flush()
-    if payload.case_id and payload.role:
-        db.add(CasePersonRole(case_id=payload.case_id, person_id=person.id, role=payload.role))
+    db.add(CasePersonRole(case_id=payload.case_id, person_id=person.id, role=payload.role))
     db.commit()
     db.refresh(person)
     write_audit(

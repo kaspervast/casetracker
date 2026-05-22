@@ -171,8 +171,10 @@ def seed() -> None:
         rels = [
             (person_records[0][0], "HAS_MOBILE", "mobile_number", mobiles[0].id),
             (person_records[1][0], "HAS_MOBILE", "mobile_number", mobiles[1].id),
+            (person_records[3][0], "HAS_MOBILE", "mobile_number", mobiles[2].id),
             (person_records[0][0], "HAS_BANK_ACCOUNT", "bank_account", accounts[0].id),
             (person_records[1][0], "HAS_BANK_ACCOUNT", "bank_account", accounts[1].id),
+            (person_records[3][0], "HAS_BANK_ACCOUNT", "bank_account", accounts[2].id),
             (person_records[0][0], "USES_UPI", "upi_id", upis[0].id),
             (person_records[1][0], "USES_UPI", "upi_id", upis[1].id),
         ]

@@ -31,6 +31,8 @@ export type PersonRecord = {
   full_name: string;
   alias_or_nickname?: string | null;
   father_name?: string | null;
+  case_id?: string | null;
+  case_role?: string | null;
   risk_level: string;
   verification_status: string;
   is_absconding: boolean;

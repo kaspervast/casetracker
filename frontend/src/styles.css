@@ -198,6 +198,19 @@ p {
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
 }
 
+.context-toolbar {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(280px, 420px) minmax(0, 1fr);
+}
+
+.context-note {
+  color: #64748b;
+  font-size: 14px;
+  margin-bottom: 0;
+}
+
 .edit-panel {
   background: #fff;
   border: 1px solid #d9e1ec;
@@ -622,6 +635,10 @@ p {
   }
 
   .graph-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .context-toolbar {
     grid-template-columns: 1fr;
   }
 

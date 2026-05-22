@@ -1,9 +1,11 @@
 import { FormEvent, useEffect, useState } from "react";
-import { createBankAccount, deleteBankAccount, listBankAccounts, updateBankAccount } from "../api/casegraph";
-import type { BankAccountRecord } from "../types/api";
+import { createBankAccount, deleteBankAccount, listBankAccounts, listCases, updateBankAccount } from "../api/casegraph";
+import type { BankAccountRecord, CaseRecord } from "../types/api";
 import { moveById } from "../utils/reorder";
 
 export function BankAccountsPage() {
+  const [cases, setCases] = useState<CaseRecord[]>([]);
+  const [selectedCaseId, setSelectedCaseId] = useState("");
   const [accounts, setAccounts] = useState<BankAccountRecord[]>([]);
   const [accountNumber, setAccountNumber] = useState("");
   const [holderName, setHolderName] = useState("");
@@ -14,19 +16,38 @@ export function BankAccountsPage() {
   const [editing, setEditing] = useState<BankAccountRecord | null>(null);
   const [editForm, setEditForm] = useState<Record<string, string>>({});
 
-  async function load() {
-    setAccounts(await listBankAccounts());
+  async function loadCasesContext() {
+    const items = await listCases();
+    setCases(items);
+    setSelectedCaseId((current) => current || items[0]?.id || "");
+  }
+
+  async function load(caseId: string) {
+    if (!caseId) {
+      setAccounts([]);
+      return;
+    }
+    setAccounts(await listBankAccounts(caseId));
   }
 
   useEffect(() => {
-    load().catch((err) => setError(err.message));
+    loadCasesContext().catch((err) => setError(err.message));
   }, []);
+
+  useEffect(() => {
+    load(selectedCaseId).catch((err) => setError(err.message));
+  }, [selectedCaseId]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
+    if (!selectedCaseId) {
+      setError("Select a case before creating a bank account");
+      return;
+    }
     setError("");
     try {
       await createBankAccount({
+        case_id: selectedCaseId,
         account_number: accountNumber,
         account_holder_name: holderName || null,
         bank_name: bankName || null,
@@ -38,7 +59,7 @@ export function BankAccountsPage() {
       setHolderName("");
       setBankName("");
       setIfsc("");
-      await load();
+      await load(selectedCaseId);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Bank account creation failed");
     }
@@ -50,7 +71,7 @@ export function BankAccountsPage() {
     setError("");
     try {
       await deleteBankAccount(account.id, reason.trim());
-      await load();
+      await load(selectedCaseId);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Bank account delete failed");
     }
@@ -91,7 +112,7 @@ export function BankAccountsPage() {
       });
       setEditing(null);
       setEditForm({});
-      await load();
+      await load(selectedCaseId);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Bank account update failed");
     }
@@ -105,12 +126,24 @@ export function BankAccountsPage() {
 
   return (
     <section className="stack">
+      <div className="context-toolbar">
+        <select value={selectedCaseId} onChange={(event) => setSelectedCaseId(event.target.value)}>
+          {cases.map((item) => (
+            <option key={item.id} value={item.id}>
+              {item.case_number} - {item.case_title}
+            </option>
+          ))}
+        </select>
+        <p className="context-note">
+          Bank accounts listed and created here are linked to the selected case.
+        </p>
+      </div>
       <form className="inline-form" onSubmit={submit}>
         <input placeholder="Account number" value={accountNumber} onChange={(event) => setAccountNumber(event.target.value)} />
         <input placeholder="Account holder" value={holderName} onChange={(event) => setHolderName(event.target.value)} />
         <input placeholder="Bank name" value={bankName} onChange={(event) => setBankName(event.target.value)} />
         <input placeholder="IFSC" value={ifsc} onChange={(event) => setIfsc(event.target.value.toUpperCase())} />
-        <button className="primary">Create Bank Account</button>
+        <button className="primary" disabled={!selectedCaseId}>Create Bank Account</button>
       </form>
       {editing && (
         <form className="edit-panel" onSubmit={saveEdit}>
@@ -162,6 +195,7 @@ export function BankAccountsPage() {
             </div>
           </article>
         ))}
+        {!accounts.length && <div className="empty">No bank accounts linked to the selected case.</div>}
       </div>
     </section>
   );

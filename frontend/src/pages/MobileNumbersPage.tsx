@@ -1,9 +1,11 @@
 import { FormEvent, useEffect, useState } from "react";
-import { createMobileNumber, deleteMobileNumber, listMobileNumbers, updateMobileNumber } from "../api/casegraph";
-import type { MobileNumberRecord } from "../types/api";
+import { createMobileNumber, deleteMobileNumber, listCases, listMobileNumbers, updateMobileNumber } from "../api/casegraph";
+import type { CaseRecord, MobileNumberRecord } from "../types/api";
 import { moveById } from "../utils/reorder";
 
 export function MobileNumbersPage() {
+  const [cases, setCases] = useState<CaseRecord[]>([]);
+  const [selectedCaseId, setSelectedCaseId] = useState("");
   const [mobiles, setMobiles] = useState<MobileNumberRecord[]>([]);
   const [mobileNumber, setMobileNumber] = useState("");
   const [subscriberName, setSubscriberName] = useState("");
@@ -13,19 +15,38 @@ export function MobileNumbersPage() {
   const [editing, setEditing] = useState<MobileNumberRecord | null>(null);
   const [editForm, setEditForm] = useState<Record<string, string>>({});
 
-  async function load() {
-    setMobiles(await listMobileNumbers());
+  async function loadCasesContext() {
+    const items = await listCases();
+    setCases(items);
+    setSelectedCaseId((current) => current || items[0]?.id || "");
+  }
+
+  async function load(caseId: string) {
+    if (!caseId) {
+      setMobiles([]);
+      return;
+    }
+    setMobiles(await listMobileNumbers(caseId));
   }
 
   useEffect(() => {
-    load().catch((err) => setError(err.message));
+    loadCasesContext().catch((err) => setError(err.message));
   }, []);
+
+  useEffect(() => {
+    load(selectedCaseId).catch((err) => setError(err.message));
+  }, [selectedCaseId]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
+    if (!selectedCaseId) {
+      setError("Select a case before creating a mobile number");
+      return;
+    }
     setError("");
     try {
       await createMobileNumber({
+        case_id: selectedCaseId,
         mobile_number: mobileNumber,
         country_code: "+91",
         subscriber_name: subscriberName || null,
@@ -36,7 +57,7 @@ export function MobileNumbersPage() {
       setMobileNumber("");
       setSubscriberName("");
       setProvider("");
-      await load();
+      await load(selectedCaseId);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Mobile number creation failed");
     }
@@ -48,7 +69,7 @@ export function MobileNumbersPage() {
     setError("");
     try {
       await deleteMobileNumber(mobile.id, reason.trim());
-      await load();
+      await load(selectedCaseId);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Mobile number delete failed");
     }
@@ -85,7 +106,7 @@ export function MobileNumbersPage() {
       });
       setEditing(null);
       setEditForm({});
-      await load();
+      await load(selectedCaseId);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Mobile number update failed");
     }
@@ -99,11 +120,23 @@ export function MobileNumbersPage() {
 
   return (
     <section className="stack">
+      <div className="context-toolbar">
+        <select value={selectedCaseId} onChange={(event) => setSelectedCaseId(event.target.value)}>
+          {cases.map((item) => (
+            <option key={item.id} value={item.id}>
+              {item.case_number} - {item.case_title}
+            </option>
+          ))}
+        </select>
+        <p className="context-note">
+          Mobile numbers listed and created here are linked to the selected case.
+        </p>
+      </div>
       <form className="inline-form" onSubmit={submit}>
         <input placeholder="Mobile number" value={mobileNumber} onChange={(event) => setMobileNumber(event.target.value)} />
         <input placeholder="Subscriber name" value={subscriberName} onChange={(event) => setSubscriberName(event.target.value)} />
         <input placeholder="SIM provider" value={provider} onChange={(event) => setProvider(event.target.value)} />
-        <button className="primary">Create Mobile Number</button>
+        <button className="primary" disabled={!selectedCaseId}>Create Mobile Number</button>
       </form>
       {editing && (
         <form className="edit-panel" onSubmit={saveEdit}>
@@ -153,6 +186,7 @@ export function MobileNumbersPage() {
             </div>
           </article>
         ))}
+        {!mobiles.length && <div className="empty">No mobile numbers linked to the selected case.</div>}
       </div>
     </section>
   );

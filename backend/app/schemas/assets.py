@@ -16,7 +16,7 @@ class MobileNumberBase(BaseModel):
 
 
 class MobileNumberCreate(MobileNumberBase):
-    pass
+    case_id: uuid.UUID
 
 
 class MobileNumberUpdate(BaseModel):
@@ -52,7 +52,7 @@ class BankAccountBase(BaseModel):
 
 
 class BankAccountCreate(BankAccountBase):
-    pass
+    case_id: uuid.UUID
 
 
 class BankAccountUpdate(BaseModel):

@@ -28,8 +28,8 @@ class PersonBase(BaseModel):
 
 
 class PersonCreate(PersonBase):
-    case_id: uuid.UUID | None = None
-    role: str | None = None
+    case_id: uuid.UUID
+    role: str
 
 
 class PersonUpdate(BaseModel):
@@ -57,6 +57,8 @@ class PersonUpdate(BaseModel):
 
 class PersonOut(PersonBase):
     id: uuid.UUID
+    case_id: uuid.UUID | None = None
+    case_role: str | None = None
     created_at: datetime
     updated_at: datetime
 
