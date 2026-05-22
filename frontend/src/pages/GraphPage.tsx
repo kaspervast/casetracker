@@ -18,13 +18,13 @@ type ChartNode = {
 };
 
 const nodeDimensions: Record<string, { width: number; height: number; radius: number }> = {
-  case: { width: 170, height: 58, radius: 8 },
-  person: { width: 150, height: 48, radius: 8 },
-  mobile_number: { width: 142, height: 44, radius: 6 },
-  bank_account: { width: 158, height: 46, radius: 6 },
-  upi_id: { width: 138, height: 42, radius: 6 },
-  evidence: { width: 148, height: 44, radius: 6 },
-  default: { width: 145, height: 44, radius: 6 }
+  case: { width: 176, height: 54, radius: 8 },
+  person: { width: 154, height: 46, radius: 8 },
+  mobile_number: { width: 150, height: 44, radius: 6 },
+  bank_account: { width: 164, height: 46, radius: 6 },
+  upi_id: { width: 142, height: 42, radius: 6 },
+  evidence: { width: 158, height: 44, radius: 6 },
+  default: { width: 150, height: 44, radius: 6 }
 };
 
 const colors: Record<string, number> = {
@@ -53,7 +53,7 @@ function nodeDegree(graph: GraphResponse, nodeId: string) {
 }
 
 function compactLabel(label: string) {
-  return label.length > 24 ? `${label.slice(0, 21)}...` : label;
+  return label.length > 22 ? `${label.slice(0, 19)}...` : label;
 }
 
 function toChartNode(graph: GraphResponse, node: GraphNode, includeLinks: boolean): ChartNode {
@@ -164,14 +164,8 @@ function configureSeries(series: am5hierarchy.LinkedHierarchy, graph: GraphRespo
   });
 
   series.labels.template.setAll({
-    centerX: am5.p50,
-    centerY: am5.p50,
-    fontSize: 12,
-    fontWeight: "600",
-    oversizedBehavior: "truncate",
-    maxWidth: 130,
-    text: "{shortName}",
-    fill: am5.color(0xffffff)
+    forceHidden: true,
+    visible: false
   });
 
   series.bullets.push((root, _series, dataItem) => {
@@ -183,6 +177,8 @@ function configureSeries(series: am5hierarchy.LinkedHierarchy, graph: GraphRespo
       centerY: am5.p50,
       width: dimensions.width,
       height: dimensions.height,
+      x: 0,
+      y: 0,
       interactive: false
     });
 
@@ -190,8 +186,8 @@ function configureSeries(series: am5hierarchy.LinkedHierarchy, graph: GraphRespo
       am5.RoundedRectangle.new(root, {
         width: dimensions.width,
         height: dimensions.height,
-        centerX: am5.p50,
-        centerY: am5.p50,
+        x: -dimensions.width / 2,
+        y: -dimensions.height / 2,
         fill,
         fillOpacity: 0.96,
         stroke: am5.color(0xffffff),
@@ -213,13 +209,14 @@ function configureSeries(series: am5hierarchy.LinkedHierarchy, graph: GraphRespo
         text: data?.shortName ?? "",
         centerX: am5.p50,
         centerY: am5.p50,
-        x: am5.p50,
-        y: am5.p50,
+        x: 0,
+        y: 0,
         width: dimensions.width - 22,
         oversizedBehavior: "truncate",
         textAlign: "center",
         fontSize: 12,
         fontWeight: "600",
+        populateText: true,
         fill: am5.color(0xffffff)
       })
     );
@@ -338,7 +335,7 @@ export function GraphPage() {
           linkWithField: "linkWith",
           minRadius: 22,
           maxRadius: 30,
-          nodePadding: 42,
+          nodePadding: 56,
           centerStrength: 0.8,
           manyBodyStrength: -18,
           linkWithStrength: 0.8,
