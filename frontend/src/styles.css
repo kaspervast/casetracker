@@ -314,46 +314,12 @@ p {
   min-height: 560px;
 }
 
-.graph-panel svg {
+.amchart-graph {
   height: 100%;
   min-height: 520px;
   touch-action: none;
   user-select: none;
   width: 100%;
-}
-
-.edge {
-  stroke: #94a3b8;
-  stroke-width: 1.5;
-}
-
-.edge.confirmed {
-  stroke: #0f766e;
-  stroke-width: 2.5;
-}
-
-.edge-label,
-.node-label {
-  fill: #172033;
-  font-size: 12px;
-  pointer-events: none;
-}
-
-.node {
-  cursor: grab;
-}
-
-.node.dragging {
-  cursor: grabbing;
-}
-
-.node circle {
-  filter: drop-shadow(0 2px 4px rgba(15, 23, 42, 0.2));
-}
-
-.node.dragging circle {
-  stroke: #0f172a;
-  stroke-width: 3;
 }
 
 .detail-panel {
@@ -366,6 +332,16 @@ p {
   border-radius: 8px;
   overflow: auto;
   padding: 12px;
+}
+
+.muted {
+  color: #64748b;
+}
+
+.edge-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 @media (max-width: 860px) {

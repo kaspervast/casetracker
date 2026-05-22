@@ -1,21 +1,25 @@
 import { useEffect, useState } from "react";
-import { Activity, FileText, GitBranch, LayoutDashboard, LogOut, Shield, Users } from "lucide-react";
+import { Activity, FileText, GitBranch, Landmark, LayoutDashboard, LogOut, Shield, Smartphone, Users } from "lucide-react";
 import { clearToken, getToken, setToken } from "./api/client";
 import { me } from "./api/casegraph";
 import { AuditPage } from "./pages/AuditPage";
+import { BankAccountsPage } from "./pages/BankAccountsPage";
 import { CasesPage } from "./pages/CasesPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { GraphPage } from "./pages/GraphPage";
 import { LoginPage } from "./pages/LoginPage";
+import { MobileNumbersPage } from "./pages/MobileNumbersPage";
 import { PersonsPage } from "./pages/PersonsPage";
 import type { CurrentUser } from "./types/api";
 
-type Page = "dashboard" | "cases" | "persons" | "graph" | "audit";
+export type Page = "dashboard" | "cases" | "persons" | "bank-accounts" | "mobile-numbers" | "graph" | "audit";
 
 const nav = [
   { id: "dashboard" as Page, label: "Dashboard", icon: LayoutDashboard },
   { id: "cases" as Page, label: "Cases", icon: FileText },
   { id: "persons" as Page, label: "Persons", icon: Users },
+  { id: "bank-accounts" as Page, label: "Bank Accounts", icon: Landmark },
+  { id: "mobile-numbers" as Page, label: "Mobile Numbers", icon: Smartphone },
   { id: "graph" as Page, label: "Graph", icon: GitBranch },
   { id: "audit" as Page, label: "Audit", icon: Activity }
 ];
@@ -96,9 +100,11 @@ export function App() {
             <span>{user.roles.join(", ")}</span>
           </div>
         </header>
-        {page === "dashboard" && <DashboardPage />}
+        {page === "dashboard" && <DashboardPage onNavigate={setPage} />}
         {page === "cases" && <CasesPage />}
         {page === "persons" && <PersonsPage />}
+        {page === "bank-accounts" && <BankAccountsPage />}
+        {page === "mobile-numbers" && <MobileNumbersPage />}
         {page === "graph" && <GraphPage />}
         {page === "audit" && <AuditPage />}
       </main>

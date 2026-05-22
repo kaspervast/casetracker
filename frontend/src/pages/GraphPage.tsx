@@ -1,169 +1,182 @@
-import { PointerEvent, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import * as am5 from "@amcharts/amcharts5";
+import * as am5hierarchy from "@amcharts/amcharts5/hierarchy";
+import am5themes_Animated from "@amcharts/amcharts5/themes/Animated";
 import { caseGraph, listCases } from "../api/casegraph";
-import type { CaseRecord, GraphNode, GraphResponse } from "../types/api";
+import type { CaseRecord, GraphEdge, GraphNode, GraphResponse } from "../types/api";
 
-type LayoutMode = "radial" | "top-down" | "left-right" | "grid" | "degree";
-type Position = { x: number; y: number };
+type LayoutMode = "force" | "top-down" | "left-right" | "clustered";
 
-const VIEWBOX = { width: 860, height: 520 };
-const NODE_MARGIN = 72;
+type ChartNode = {
+  id: string;
+  name: string;
+  value: number;
+  entityType: string;
+  linkWith?: string[];
+  children?: ChartNode[];
+};
 
-const colors: Record<string, string> = {
-  case: "#0f766e",
-  person: "#2563eb",
-  mobile_number: "#7c3aed",
-  bank_account: "#b45309",
-  upi_id: "#be123c",
-  evidence: "#475569"
+const colors: Record<string, number> = {
+  case: 0x0f766e,
+  person: 0x2563eb,
+  mobile_number: 0x7c3aed,
+  bank_account: 0xb45309,
+  upi_id: 0xbe123c,
+  evidence: 0x475569
 };
 
 const layoutLabels: Record<LayoutMode, string> = {
-  radial: "Radial",
-  "top-down": "Top down",
-  "left-right": "Left-right",
-  grid: "Grid",
-  degree: "Degree weighted"
+  force: "Zoomable force tree",
+  "top-down": "Top down tree",
+  "left-right": "Left-right tree",
+  clustered: "Clustered hierarchy"
 };
 
-function clamp(value: number, min: number, max: number) {
-  return Math.min(Math.max(value, min), max);
-}
-
-function getRootNode(graph: GraphResponse): GraphNode | undefined {
+function rootGraphNode(graph: GraphResponse): GraphNode | undefined {
   return graph.nodes.find((node) => node.type === "case") ?? graph.nodes[0];
 }
 
-function buildDepths(graph: GraphResponse) {
-  const root = getRootNode(graph);
+function nodeDegree(graph: GraphResponse, nodeId: string) {
+  return graph.edges.filter((edge) => edge.source === nodeId || edge.target === nodeId).length;
+}
+
+function toChartNode(graph: GraphResponse, node: GraphNode, includeLinks: boolean): ChartNode {
+  const linkedIds = includeLinks
+    ? graph.edges
+        .filter((edge) => edge.source === node.id || edge.target === node.id)
+        .map((edge) => (edge.source === node.id ? edge.target : edge.source))
+    : undefined;
+
+  return {
+    id: node.id,
+    name: node.label,
+    value: Math.max(nodeDegree(graph, node.id), 1),
+    entityType: node.type,
+    linkWith: linkedIds,
+    children: []
+  };
+}
+
+function buildForceData(graph: GraphResponse): ChartNode[] {
+  const root = rootGraphNode(graph);
+  if (!root) return [];
+  const rootNode = toChartNode(graph, root, true);
+  rootNode.children = graph.nodes
+    .filter((node) => node.id !== root.id)
+    .map((node) => toChartNode(graph, node, true));
+  return [rootNode];
+}
+
+function buildTreeData(graph: GraphResponse): ChartNode[] {
+  const root = rootGraphNode(graph);
+  if (!root) return [];
+
+  const nodeById = new Map(graph.nodes.map((node) => [node.id, node]));
   const adjacency = new Map<string, string[]>();
   graph.nodes.forEach((node) => adjacency.set(node.id, []));
   graph.edges.forEach((edge) => {
     adjacency.get(edge.source)?.push(edge.target);
     adjacency.get(edge.target)?.push(edge.source);
   });
-  const depths = new Map<string, number>();
-  if (!root) return depths;
 
+  const visited = new Set<string>([root.id]);
+  const chartNodeById = new Map<string, ChartNode>();
+  const rootNode = toChartNode(graph, root, false);
+  chartNodeById.set(root.id, rootNode);
   const queue = [root.id];
-  depths.set(root.id, 0);
+
   while (queue.length) {
-    const current = queue.shift()!;
-    const nextDepth = (depths.get(current) ?? 0) + 1;
-    for (const next of adjacency.get(current) ?? []) {
-      if (depths.has(next)) continue;
-      depths.set(next, nextDepth);
-      queue.push(next);
+    const currentId = queue.shift()!;
+    const currentChartNode = chartNodeById.get(currentId)!;
+    const neighbors = [...(adjacency.get(currentId) ?? [])].sort((a, b) => {
+      const typeA = nodeById.get(a)?.type ?? "";
+      const typeB = nodeById.get(b)?.type ?? "";
+      return typeA.localeCompare(typeB) || (nodeById.get(a)?.label ?? "").localeCompare(nodeById.get(b)?.label ?? "");
+    });
+
+    for (const neighborId of neighbors) {
+      if (visited.has(neighborId)) continue;
+      const neighbor = nodeById.get(neighborId);
+      if (!neighbor) continue;
+      visited.add(neighborId);
+      const child = toChartNode(graph, neighbor, false);
+      chartNodeById.set(neighborId, child);
+      currentChartNode.children?.push(child);
+      queue.push(neighborId);
     }
   }
-  graph.nodes.forEach((node) => {
-    if (!depths.has(node.id)) depths.set(node.id, 1);
-  });
-  return depths;
+
+  for (const node of graph.nodes) {
+    if (visited.has(node.id)) continue;
+    rootNode.children?.push(toChartNode(graph, node, false));
+  }
+
+  return [rootNode];
 }
 
-function groupByDepth(graph: GraphResponse) {
-  const depths = buildDepths(graph);
-  const groups = new Map<number, GraphNode[]>();
-  graph.nodes.forEach((node) => {
-    const depth = depths.get(node.id) ?? 1;
-    groups.set(depth, [...(groups.get(depth) ?? []), node]);
-  });
-  return Array.from(groups.entries()).sort(([a], [b]) => a - b);
+function describeLayout(layout: LayoutMode) {
+  if (layout === "top-down") return "Tree layout with orthogonal/angular parent-child edges.";
+  if (layout === "left-right") return "Horizontal hierarchy for wide investigations.";
+  if (layout === "clustered") return "Clustered hierarchy keeps leaf nodes aligned by depth.";
+  return "Force-directed investigation graph with draggable nodes and cross-links.";
 }
 
-function computeLayout(graph: GraphResponse, layout: LayoutMode): Map<string, Position> {
-  const positions = new Map<string, Position>();
-  const root = getRootNode(graph);
-  const center = { x: VIEWBOX.width / 2, y: VIEWBOX.height / 2 };
+function findGraphNode(graph: GraphResponse, chartNode: ChartNode | undefined) {
+  if (!chartNode) return null;
+  return graph.nodes.find((node) => node.id === chartNode.id) ?? null;
+}
 
-  if (!graph.nodes.length) return positions;
-
-  if (layout === "radial") {
-    if (root) positions.set(root.id, center);
-    const otherNodes = graph.nodes.filter((node) => node.id !== root?.id);
-    otherNodes.forEach((node, index) => {
-      const angle = (index / Math.max(otherNodes.length, 1)) * Math.PI * 2 - Math.PI / 2;
-      const radiusX = 285;
-      const radiusY = 180;
-      positions.set(node.id, {
-        x: center.x + Math.cos(angle) * radiusX,
-        y: center.y + Math.sin(angle) * radiusY
-      });
-    });
-    return positions;
-  }
-
-  if (layout === "top-down" || layout === "left-right") {
-    const levels = groupByDepth(graph);
-    const levelCount = Math.max(levels.length, 1);
-    levels.forEach(([_, nodes], levelIndex) => {
-      nodes.forEach((node, nodeIndex) => {
-        const spread = nodes.length + 1;
-        if (layout === "top-down") {
-          positions.set(node.id, {
-            x: (VIEWBOX.width / spread) * (nodeIndex + 1),
-            y: NODE_MARGIN + ((VIEWBOX.height - NODE_MARGIN * 2) / Math.max(levelCount - 1, 1)) * levelIndex
-          });
-        } else {
-          positions.set(node.id, {
-            x: NODE_MARGIN + ((VIEWBOX.width - NODE_MARGIN * 2) / Math.max(levelCount - 1, 1)) * levelIndex,
-            y: (VIEWBOX.height / spread) * (nodeIndex + 1)
-          });
-        }
-      });
-    });
-    return positions;
-  }
-
-  if (layout === "grid") {
-    const columns = Math.ceil(Math.sqrt(graph.nodes.length));
-    const rows = Math.ceil(graph.nodes.length / columns);
-    graph.nodes.forEach((node, index) => {
-      const column = index % columns;
-      const row = Math.floor(index / columns);
-      positions.set(node.id, {
-        x: NODE_MARGIN + ((VIEWBOX.width - NODE_MARGIN * 2) / Math.max(columns - 1, 1)) * column,
-        y: NODE_MARGIN + ((VIEWBOX.height - NODE_MARGIN * 2) / Math.max(rows - 1, 1)) * row
-      });
-    });
-    return positions;
-  }
-
-  const degree = new Map<string, number>();
-  graph.nodes.forEach((node) => degree.set(node.id, 0));
-  graph.edges.forEach((edge) => {
-    degree.set(edge.source, (degree.get(edge.source) ?? 0) + 1);
-    degree.set(edge.target, (degree.get(edge.target) ?? 0) + 1);
+function configureSeries(series: am5hierarchy.LinkedHierarchy, graph: GraphResponse, onSelect: (node: GraphNode) => void) {
+  series.nodes.template.setAll({
+    cursorOverStyle: "pointer",
+    draggable: true,
+    tooltipText: "{name}\n{entityType}"
   });
-  const sorted = [...graph.nodes].sort((a, b) => (degree.get(b.id) ?? 0) - (degree.get(a.id) ?? 0));
-  sorted.forEach((node, index) => {
-    if (index === 0) {
-      positions.set(node.id, center);
-      return;
-    }
-    const ring = Math.ceil(index / 8);
-    const indexInRing = (index - 1) % 8;
-    const nodesInRing = Math.min(8, sorted.length - (ring - 1) * 8 - 1);
-    const angle = (indexInRing / Math.max(nodesInRing, 1)) * Math.PI * 2 - Math.PI / 2;
-    const radius = 115 + ring * 82;
-    positions.set(node.id, {
-      x: clamp(center.x + Math.cos(angle) * radius, NODE_MARGIN, VIEWBOX.width - NODE_MARGIN),
-      y: clamp(center.y + Math.sin(angle) * radius, NODE_MARGIN, VIEWBOX.height - NODE_MARGIN)
-    });
+
+  series.circles.template.setAll({
+    strokeWidth: 2,
+    strokeOpacity: 1
   });
-  return positions;
+
+  series.circles.template.adapters.add("fill", (fill, target) => {
+    const data = target.dataItem?.dataContext as ChartNode | undefined;
+    const color = colors[data?.entityType ?? ""];
+    return color ? am5.color(color) : fill ?? am5.color(0x334155);
+  });
+
+  series.circles.template.adapters.add("stroke", (stroke, target) => {
+    const data = target.dataItem?.dataContext as ChartNode | undefined;
+    const color = colors[data?.entityType ?? ""];
+    return color ? am5.color(color) : stroke ?? am5.color(0x334155);
+  });
+
+  series.links.template.setAll({
+    strokeOpacity: 0.55,
+    strokeWidth: 2
+  });
+
+  series.labels.template.setAll({
+    fontSize: 12,
+    oversizedBehavior: "wrap",
+    maxWidth: 150,
+    fill: am5.color(0x172033)
+  });
+
+  series.nodes.template.events.on("click", (event) => {
+    const chartNode = event.target.dataItem?.dataContext as ChartNode | undefined;
+    const graphNode = findGraphNode(graph, chartNode);
+    if (graphNode) onSelect(graphNode);
+  });
 }
 
 export function GraphPage() {
   const [cases, setCases] = useState<CaseRecord[]>([]);
   const [caseId, setCaseId] = useState("");
   const [graph, setGraph] = useState<GraphResponse | null>(null);
-  const [layout, setLayout] = useState<LayoutMode>("radial");
-  const [positions, setPositions] = useState<Map<string, Position>>(new Map());
-  const [draggingNodeId, setDraggingNodeId] = useState<string | null>(null);
+  const [layout, setLayout] = useState<LayoutMode>("force");
   const [selected, setSelected] = useState<GraphNode | null>(null);
   const [error, setError] = useState("");
-  const svgRef = useRef<SVGSVGElement | null>(null);
+  const chartRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     listCases()
@@ -176,60 +189,97 @@ export function GraphPage() {
 
   useEffect(() => {
     if (!caseId) return;
-    caseGraph(caseId).then(setGraph).catch((err) => setError(err.message));
+    caseGraph(caseId)
+      .then((nextGraph) => {
+        setGraph(nextGraph);
+        setSelected(null);
+      })
+      .catch((err) => setError(err.message));
   }, [caseId]);
 
-  useEffect(() => {
-    if (!graph) {
-      setPositions(new Map());
-      return;
+  const selectedCase = useMemo(
+    () => cases.find((item) => item.id === caseId),
+    [caseId, cases]
+  );
+
+  useLayoutEffect(() => {
+    if (!chartRef.current || !graph) return;
+
+    const root = am5.Root.new(chartRef.current);
+    root.setThemes([am5themes_Animated.new(root)]);
+
+    const zoomable = root.container.children.push(
+      am5.ZoomableContainer.new(root, {
+        width: am5.p100,
+        height: am5.p100,
+        wheelable: true,
+        pinchZoom: true
+      })
+    );
+
+    zoomable.children.push(
+      am5.ZoomTools.new(root, {
+        target: zoomable,
+        x: am5.p100,
+        centerX: am5.p100,
+        y: am5.p100,
+        centerY: am5.p100
+      })
+    );
+
+    const commonSettings = {
+      valueField: "value",
+      categoryField: "name",
+      childDataField: "children",
+      idField: "id"
+    };
+
+    let series: am5hierarchy.LinkedHierarchy;
+    if (layout === "force") {
+      series = zoomable.contents.children.push(
+        am5hierarchy.ForceDirected.new(root, {
+          ...commonSettings,
+          linkWithField: "linkWith",
+          minRadius: 22,
+          maxRadius: 44,
+          nodePadding: 16,
+          centerStrength: 0.8,
+          manyBodyStrength: -18,
+          linkWithStrength: 0.8,
+          initialFrames: 220
+        })
+      );
+      series.data.setAll(buildForceData(graph));
+    } else {
+      series = zoomable.contents.children.push(
+        am5hierarchy.Tree.new(root, {
+          ...commonSettings,
+          orientation: layout === "left-right" ? "horizontal" : "vertical",
+          clustered: layout === "clustered",
+          singleBranchOnly: false,
+          downDepth: 99,
+          initialDepth: 99,
+          nodeSeparation: () => 1.15
+        })
+      );
+      series.data.setAll(buildTreeData(graph));
     }
-    setPositions(computeLayout(graph, layout));
+
+    configureSeries(series, graph, setSelected);
+    series.set("selectedDataItem", series.dataItems[0]);
+    series.appear(800, 80);
+
+    return () => root.dispose();
   }, [graph, layout]);
 
-  const selectedLayoutDescription = useMemo(() => {
-    if (layout === "top-down") return "Breadth-first hierarchy from the case node.";
-    if (layout === "left-right") return "Horizontal breadth-first hierarchy.";
-    if (layout === "grid") return "Equal grid spacing for scanning dense graphs.";
-    if (layout === "degree") return "Highly connected nodes are placed closer to the center.";
-    return "Case-centric radial graph.";
-  }, [layout]);
-
-  function svgPoint(event: PointerEvent<SVGSVGElement>): Position | null {
-    const svg = svgRef.current;
-    if (!svg) return null;
-    const point = svg.createSVGPoint();
-    point.x = event.clientX;
-    point.y = event.clientY;
-    const transformed = point.matrixTransform(svg.getScreenCTM()?.inverse());
-    return {
-      x: clamp(transformed.x, NODE_MARGIN / 2, VIEWBOX.width - NODE_MARGIN / 2),
-      y: clamp(transformed.y, NODE_MARGIN / 2, VIEWBOX.height - NODE_MARGIN / 2)
-    };
-  }
-
-  function startDrag(event: PointerEvent<SVGGElement>, node: GraphNode) {
-    event.preventDefault();
-    event.stopPropagation();
-    setSelected(node);
-    setDraggingNodeId(node.id);
-    event.currentTarget.setPointerCapture(event.pointerId);
-  }
-
-  function dragNode(event: PointerEvent<SVGSVGElement>) {
-    if (!draggingNodeId) return;
-    const nextPoint = svgPoint(event);
-    if (!nextPoint) return;
-    setPositions((current) => {
-      const next = new Map(current);
-      next.set(draggingNodeId, nextPoint);
-      return next;
+  const edgeSummary = useMemo(() => {
+    if (!graph) return [];
+    const counts = new Map<string, number>();
+    graph.edges.forEach((edge: GraphEdge) => {
+      counts.set(edge.label, (counts.get(edge.label) ?? 0) + 1);
     });
-  }
-
-  function stopDrag() {
-    setDraggingNodeId(null);
-  }
+    return Array.from(counts.entries()).sort(([a], [b]) => a.localeCompare(b));
+  }, [graph]);
 
   return (
     <section className="graph-layout">
@@ -248,63 +298,19 @@ export function GraphPage() {
             </option>
           ))}
         </select>
-        <button type="button" onClick={() => graph && setPositions(computeLayout(graph, layout))}>
-          Reset layout
-        </button>
-        <span className="graph-hint">{selectedLayoutDescription}</span>
+        <span className="graph-hint">{describeLayout(layout)}</span>
         {error && <span className="error-inline">{error}</span>}
       </div>
+
       <div className="graph-panel">
-        <svg
-          ref={svgRef}
-          viewBox={`0 0 ${VIEWBOX.width} ${VIEWBOX.height}`}
-          role="img"
-          aria-label="Case relationship graph"
-          onPointerMove={dragNode}
-          onPointerUp={stopDrag}
-          onPointerCancel={stopDrag}
-          onPointerLeave={stopDrag}
-        >
-          {graph?.edges.map((edge) => {
-            const source = positions.get(edge.source);
-            const target = positions.get(edge.target);
-            if (!source || !target) return null;
-            const midX = (source.x + target.x) / 2;
-            const midY = (source.y + target.y) / 2;
-            return (
-              <g key={edge.id}>
-                <line
-                  x1={source.x}
-                  y1={source.y}
-                  x2={target.x}
-                  y2={target.y}
-                  className={edge.confidence === "Confirmed" ? "edge confirmed" : "edge"}
-                />
-                <text x={midX} y={midY} className="edge-label">
-                  {edge.label}
-                </text>
-              </g>
-            );
-          })}
-          {graph?.nodes.map((node) => {
-            const position = positions.get(node.id);
-            if (!position) return null;
-            return (
-              <g
-                key={node.id}
-                onPointerDown={(event) => startDrag(event, node)}
-                className={draggingNodeId === node.id ? "node dragging" : "node"}
-              >
-                <circle cx={position.x} cy={position.y} r={node.type === "case" ? 34 : 26} fill={colors[node.type] ?? "#334155"} />
-                <text x={position.x} y={position.y + 46} textAnchor="middle" className="node-label">
-                  {node.label.slice(0, 28)}
-                </text>
-              </g>
-            );
-          })}
-        </svg>
+        <div className="amchart-graph" ref={chartRef} />
         <aside className="detail-panel">
-          <h2>Node Details</h2>
+          <h2>Graph Details</h2>
+          {selectedCase && (
+            <p className="muted">
+              {selectedCase.case_number}: {selectedCase.case_title}
+            </p>
+          )}
           {selected ? (
             <>
               <strong>{selected.label}</strong>
@@ -312,8 +318,16 @@ export function GraphPage() {
               <pre>{JSON.stringify(selected.data, null, 2)}</pre>
             </>
           ) : (
-            <p>Select a node to inspect entity details.</p>
+            <p>Select a node to inspect entity details. Use mouse wheel or pinch to zoom; drag the canvas to pan. In force layout, nodes can be dragged.</p>
           )}
+          <h2>Relationship Types</h2>
+          <div className="edge-summary">
+            {edgeSummary.map(([label, count]) => (
+              <span className="badge" key={label}>
+                {label}: {count}
+              </span>
+            ))}
+          </div>
         </aside>
       </div>
     </section>

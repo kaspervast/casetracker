@@ -35,6 +35,36 @@ export type PersonRecord = {
   updated_at: string;
 };
 
+export type MobileNumberRecord = {
+  id: string;
+  mobile_number: string;
+  country_code: string;
+  sim_provider?: string | null;
+  subscriber_name?: string | null;
+  current_status: string;
+  source?: string | null;
+  verification_status: string;
+  notes?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type BankAccountRecord = {
+  id: string;
+  bank_name?: string | null;
+  branch_name?: string | null;
+  ifsc?: string | null;
+  account_number: string;
+  account_holder_name?: string | null;
+  account_type?: string | null;
+  current_status: string;
+  freeze_amount?: number | null;
+  source?: string | null;
+  notes?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type DashboardSummary = {
   total_cases: number;
   active_cases: number;

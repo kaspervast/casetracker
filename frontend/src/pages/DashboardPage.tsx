@@ -1,8 +1,13 @@
 import { useEffect, useState } from "react";
 import { dashboard } from "../api/casegraph";
+import type { Page } from "../App";
 import type { DashboardSummary } from "../types/api";
 
-export function DashboardPage() {
+type Props = {
+  onNavigate: (page: Page) => void;
+};
+
+export function DashboardPage({ onNavigate }: Props) {
   const [data, setData] = useState<DashboardSummary | null>(null);
   const [error, setError] = useState("");
 
@@ -30,11 +35,11 @@ export function DashboardPage() {
   return (
     <section className="stack">
       <div className="quick-actions">
-        <button className="primary">New Case</button>
-        <button>Add Person</button>
-        <button>Add Bank Account</button>
-        <button>Add Mobile Number</button>
-        <button>Open Graph View</button>
+        <button className="primary" type="button" onClick={() => onNavigate("cases")}>New Case</button>
+        <button type="button" onClick={() => onNavigate("persons")}>Add Person</button>
+        <button type="button" onClick={() => onNavigate("bank-accounts")}>Add Bank Account</button>
+        <button type="button" onClick={() => onNavigate("mobile-numbers")}>Add Mobile Number</button>
+        <button type="button" onClick={() => onNavigate("graph")}>Open Graph View</button>
       </div>
       <div className="stats-grid">
         {stats.map(([label, value]) => (

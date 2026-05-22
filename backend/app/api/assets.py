@@ -1,0 +1,97 @@
+from fastapi import APIRouter, Depends, HTTPException, Request
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
+
+from app.api.deps import get_current_user
+from app.db.session import get_db
+from app.models.core import BankAccount, MobileNumber, User
+from app.schemas.assets import (
+    BankAccountCreate,
+    BankAccountOut,
+    MobileNumberCreate,
+    MobileNumberOut,
+)
+from app.services.audit import write_audit
+
+router = APIRouter(tags=["assets"])
+
+
+@router.get("/mobile-numbers", response_model=list[MobileNumberOut])
+def list_mobile_numbers(
+    db: Session = Depends(get_db), user: User = Depends(get_current_user)
+):
+    return list(
+        db.scalars(
+            select(MobileNumber)
+            .where(MobileNumber.deleted_at.is_(None))
+            .order_by(MobileNumber.updated_at.desc())
+        )
+    )
+
+
+@router.post("/mobile-numbers", response_model=MobileNumberOut, status_code=201)
+def create_mobile_number(
+    payload: MobileNumberCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    mobile = MobileNumber(**payload.model_dump(), created_by=user.id, updated_by=user.id)
+    db.add(mobile)
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Mobile number already exists") from exc
+    db.refresh(mobile)
+    write_audit(
+        db,
+        action="MOBILE_NUMBER_CREATED",
+        request=request,
+        user=user,
+        entity_type="mobile_number",
+        entity_id=mobile.id,
+        new_value=MobileNumberOut.model_validate(mobile).model_dump(mode="json"),
+    )
+    return mobile
+
+
+@router.get("/bank-accounts", response_model=list[BankAccountOut])
+def list_bank_accounts(
+    db: Session = Depends(get_db), user: User = Depends(get_current_user)
+):
+    return list(
+        db.scalars(
+            select(BankAccount)
+            .where(BankAccount.deleted_at.is_(None))
+            .order_by(BankAccount.updated_at.desc())
+        )
+    )
+
+
+@router.post("/bank-accounts", response_model=BankAccountOut, status_code=201)
+def create_bank_account(
+    payload: BankAccountCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    account = BankAccount(**payload.model_dump(), created_by=user.id, updated_by=user.id)
+    db.add(account)
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Bank account already exists") from exc
+    db.refresh(account)
+    write_audit(
+        db,
+        action="BANK_ACCOUNT_CREATED",
+        request=request,
+        user=user,
+        entity_type="bank_account",
+        entity_id=account.id,
+        new_value=BankAccountOut.model_validate(account).model_dump(mode="json"),
+    )
+    return account

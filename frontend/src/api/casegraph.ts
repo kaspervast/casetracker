@@ -1,10 +1,12 @@
 import { api } from "./client";
 import type {
   AuditLog,
+  BankAccountRecord,
   CaseRecord,
   CurrentUser,
   DashboardSummary,
   GraphResponse,
+  MobileNumberRecord,
   PersonRecord
 } from "../types/api";
 
@@ -37,6 +39,28 @@ export function listPersons() {
 
 export function createPerson(payload: Record<string, unknown>) {
   return api<PersonRecord>("/persons", { method: "POST", body: JSON.stringify(payload) });
+}
+
+export function listMobileNumbers() {
+  return api<MobileNumberRecord[]>("/mobile-numbers");
+}
+
+export function createMobileNumber(payload: Record<string, unknown>) {
+  return api<MobileNumberRecord>("/mobile-numbers", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function listBankAccounts() {
+  return api<BankAccountRecord[]>("/bank-accounts");
+}
+
+export function createBankAccount(payload: Record<string, unknown>) {
+  return api<BankAccountRecord>("/bank-accounts", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
 }
 
 export function caseGraph(caseId: string) {
