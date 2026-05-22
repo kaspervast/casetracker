@@ -10,10 +10,21 @@ type LayoutMode = "force" | "force-bullets" | "top-down" | "left-right" | "clust
 type ChartNode = {
   id: string;
   name: string;
+  shortName: string;
   value: number;
   entityType: string;
   linkWith?: string[];
   children?: ChartNode[];
+};
+
+const nodeDimensions: Record<string, { width: number; height: number; radius: number }> = {
+  case: { width: 170, height: 58, radius: 8 },
+  person: { width: 150, height: 48, radius: 8 },
+  mobile_number: { width: 142, height: 44, radius: 6 },
+  bank_account: { width: 158, height: 46, radius: 6 },
+  upi_id: { width: 138, height: 42, radius: 6 },
+  evidence: { width: 148, height: 44, radius: 6 },
+  default: { width: 145, height: 44, radius: 6 }
 };
 
 const colors: Record<string, number> = {
@@ -41,6 +52,10 @@ function nodeDegree(graph: GraphResponse, nodeId: string) {
   return graph.edges.filter((edge) => edge.source === nodeId || edge.target === nodeId).length;
 }
 
+function compactLabel(label: string) {
+  return label.length > 24 ? `${label.slice(0, 21)}...` : label;
+}
+
 function toChartNode(graph: GraphResponse, node: GraphNode, includeLinks: boolean): ChartNode {
   const linkedIds = includeLinks
     ? graph.edges
@@ -51,6 +66,7 @@ function toChartNode(graph: GraphResponse, node: GraphNode, includeLinks: boolea
   return {
     id: node.id,
     name: node.label,
+    shortName: compactLabel(node.label),
     value: Math.max(nodeDegree(graph, node.id), 1),
     entityType: node.type,
     linkWith: linkedIds,
@@ -132,24 +148,14 @@ function configureSeries(series: am5hierarchy.LinkedHierarchy, graph: GraphRespo
   series.nodes.template.setAll({
     cursorOverStyle: "pointer",
     draggable: true,
-    tooltipText: "{name}\n{entityType}"
+    tooltipText: "{name}\n{entityType}",
+    width: 170,
+    height: 58
   });
 
   series.circles.template.setAll({
-    strokeWidth: 2,
-    strokeOpacity: 1
-  });
-
-  series.circles.template.adapters.add("fill", (fill, target) => {
-    const data = target.dataItem?.dataContext as ChartNode | undefined;
-    const color = colors[data?.entityType ?? ""];
-    return color ? am5.color(color) : fill ?? am5.color(0x334155);
-  });
-
-  series.circles.template.adapters.add("stroke", (stroke, target) => {
-    const data = target.dataItem?.dataContext as ChartNode | undefined;
-    const color = colors[data?.entityType ?? ""];
-    return color ? am5.color(color) : stroke ?? am5.color(0x334155);
+    forceHidden: true,
+    radius: 1
   });
 
   series.links.template.setAll({
@@ -158,10 +164,69 @@ function configureSeries(series: am5hierarchy.LinkedHierarchy, graph: GraphRespo
   });
 
   series.labels.template.setAll({
+    centerX: am5.p50,
+    centerY: am5.p50,
     fontSize: 12,
-    oversizedBehavior: "wrap",
-    maxWidth: 150,
-    fill: am5.color(0x172033)
+    fontWeight: "600",
+    oversizedBehavior: "truncate",
+    maxWidth: 130,
+    text: "{shortName}",
+    fill: am5.color(0xffffff)
+  });
+
+  series.bullets.push((root, _series, dataItem) => {
+    const data = dataItem.dataContext as ChartNode | undefined;
+    const dimensions = nodeDimensions[data?.entityType ?? "default"] ?? nodeDimensions.default;
+    const fill = am5.color(colors[data?.entityType ?? ""] ?? 0x334155);
+    const container = am5.Container.new(root, {
+      centerX: am5.p50,
+      centerY: am5.p50,
+      width: dimensions.width,
+      height: dimensions.height,
+      interactive: false
+    });
+
+    container.children.push(
+      am5.RoundedRectangle.new(root, {
+        width: dimensions.width,
+        height: dimensions.height,
+        centerX: am5.p50,
+        centerY: am5.p50,
+        fill,
+        fillOpacity: 0.96,
+        stroke: am5.color(0xffffff),
+        strokeOpacity: 0.95,
+        strokeWidth: 2,
+        cornerRadiusTL: dimensions.radius,
+        cornerRadiusTR: dimensions.radius,
+        cornerRadiusBR: dimensions.radius,
+        cornerRadiusBL: dimensions.radius,
+        shadowColor: am5.color(0x0f172a),
+        shadowBlur: 4,
+        shadowOpacity: 0.16,
+        shadowOffsetY: 2
+      })
+    );
+
+    container.children.push(
+      am5.Label.new(root, {
+        text: data?.shortName ?? "",
+        centerX: am5.p50,
+        centerY: am5.p50,
+        x: am5.p50,
+        y: am5.p50,
+        width: dimensions.width - 22,
+        oversizedBehavior: "truncate",
+        textAlign: "center",
+        fontSize: 12,
+        fontWeight: "600",
+        fill: am5.color(0xffffff)
+      })
+    );
+
+    return am5.Bullet.new(root, {
+      sprite: container
+    });
   });
 
   series.nodes.template.events.on("click", (event) => {
@@ -272,8 +337,8 @@ export function GraphPage() {
           ...commonSettings,
           linkWithField: "linkWith",
           minRadius: 22,
-          maxRadius: 44,
-          nodePadding: 16,
+          maxRadius: 30,
+          nodePadding: 42,
           centerStrength: 0.8,
           manyBodyStrength: -18,
           linkWithStrength: 0.8,
