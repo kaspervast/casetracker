@@ -69,6 +69,11 @@ export type BankAccountRecord = {
   updated_at: string;
 };
 
+export type ChartDatum = {
+  label: string;
+  value: number;
+};
+
 export type DashboardSummary = {
   total_cases: number;
   active_cases: number;
@@ -82,6 +87,10 @@ export type DashboardSummary = {
   total_mobile_numbers: number;
   total_bank_accounts: number;
   total_evidence_items: number;
+  cases_by_status: ChartDatum[];
+  cases_by_priority: ChartDatum[];
+  cases_by_pending_age: ChartDatum[];
+  accused_arrest_status: ChartDatum[];
   recent_cases: CaseRecord[];
   recent_audit_activity: Array<Record<string, string | null>>;
 };

@@ -1,11 +1,77 @@
 import { useEffect, useState } from "react";
 import { dashboard } from "../api/casegraph";
 import type { Page } from "../App";
-import type { DashboardSummary } from "../types/api";
+import type { ChartDatum, DashboardSummary } from "../types/api";
 
 type Props = {
   onNavigate: (page: Page) => void;
 };
+
+const chartColors = ["#0f766e", "#2563eb", "#c2410c", "#9333ea", "#be123c", "#64748b"];
+
+function total(items: ChartDatum[]) {
+  return items.reduce((sum, item) => sum + item.value, 0);
+}
+
+function BarChartCard({ title, items }: { title: string; items: ChartDatum[] }) {
+  const max = Math.max(1, ...items.map((item) => item.value));
+  return (
+    <section className="chart-card">
+      <h2>{title}</h2>
+      <div className="bar-chart">
+        {items.map((item, index) => (
+          <div className="bar-row" key={item.label}>
+            <div className="bar-label">
+              <span>{item.label}</span>
+              <strong>{item.value}</strong>
+            </div>
+            <div className="bar-track">
+              <span
+                className="bar-fill"
+                style={{
+                  background: chartColors[index % chartColors.length],
+                  width: `${(item.value / max) * 100}%`
+                }}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function DonutChartCard({ title, items }: { title: string; items: ChartDatum[] }) {
+  const rawTotal = total(items);
+  const sum = Math.max(1, rawTotal);
+  let start = 0;
+  const segments = items.map((item, index) => {
+    const end = start + (item.value / sum) * 100;
+    const segment = `${chartColors[index % chartColors.length]} ${start}% ${end}%`;
+    start = end;
+    return segment;
+  });
+  return (
+    <section className="chart-card">
+      <h2>{title}</h2>
+      <div className="donut-layout">
+        <div className="donut-chart" style={{ background: rawTotal ? `conic-gradient(${segments.join(", ")})` : "#e2e8f0" }}>
+          <strong>{rawTotal}</strong>
+          <span>Total</span>
+        </div>
+        <div className="chart-legend">
+          {items.map((item, index) => (
+            <div className="legend-row" key={item.label}>
+              <span className="legend-dot" style={{ background: chartColors[index % chartColors.length] }} />
+              <span>{item.label}</span>
+              <strong>{item.value}</strong>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
 
 export function DashboardPage({ onNavigate }: Props) {
   const [data, setData] = useState<DashboardSummary | null>(null);
@@ -48,6 +114,12 @@ export function DashboardPage({ onNavigate }: Props) {
             <strong>{value}</strong>
           </article>
         ))}
+      </div>
+      <div className="charts-grid">
+        <BarChartCard title="Cases By Status" items={data.cases_by_status} />
+        <BarChartCard title="Cases By Priority" items={data.cases_by_priority} />
+        <BarChartCard title="Pending Since FIR Filed" items={data.cases_by_pending_age} />
+        <DonutChartCard title="Accused Arrest Status" items={data.accused_arrest_status} />
       </div>
       <div className="two-column">
         <section>
