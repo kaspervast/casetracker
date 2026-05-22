@@ -1,0 +1,2 @@
+mobile_number,country_code,sim_provider,subscriber_name,current_status,source,verification_status,notes
+9876500000,+91,Sample Provider,Sample Subscriber,Unknown,Manual entry,Unverified,

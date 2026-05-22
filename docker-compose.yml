@@ -1,0 +1,46 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: casegraph-postgres
+    environment:
+      POSTGRES_DB: casegraph_le
+      POSTGRES_USER: postgress
+      POSTGRES_PASSWORD: "caseMgmt#2026"
+    ports:
+      - "5566:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgress -d casegraph_le"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: ./backend
+    container_name: casegraph-backend
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgress:caseMgmt%232026@postgres:5432/casegraph_le
+      CORS_ORIGINS: '["http://localhost:5173","http://127.0.0.1:5173"]'
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - uploads_data:/app/uploads
+
+  frontend:
+    build: ./frontend
+    container_name: casegraph-frontend
+    environment:
+      VITE_API_BASE_URL: http://localhost:8000/api
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+  uploads_data:
