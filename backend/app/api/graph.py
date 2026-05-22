@@ -4,7 +4,12 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, require_case_access
+from app.api.deps import (
+    accessible_case_ids,
+    get_current_user,
+    require_case_access,
+    require_person_access,
+)
 from app.db.session import get_db
 from app.models.core import (
     BankAccount,
@@ -124,6 +129,7 @@ def person_graph(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    require_person_access(person_id, db, user)
     person = db.get(Person, person_id)
     nodes: dict[str, GraphNode] = {
         _node_id("person", person_id): GraphNode(
@@ -133,9 +139,11 @@ def person_graph(
         )
     }
     edges: list[GraphEdge] = []
+    allowed_case_ids = accessible_case_ids(db, user)
     relationships = db.scalars(
         select(Relationship).where(
             Relationship.deleted_at.is_(None),
+            Relationship.case_id.in_(allowed_case_ids),
             (
                 (Relationship.source_entity_type == "person")
                 & (Relationship.source_entity_id == person_id)
@@ -147,8 +155,6 @@ def person_graph(
         )
     )
     for rel in relationships:
-        if rel.case_id:
-            require_case_access(rel.case_id, db, user)
         source_id = _node_id(rel.source_entity_type, rel.source_entity_id)
         target_id = _node_id(rel.target_entity_type, rel.target_entity_id)
         nodes.setdefault(
@@ -157,6 +163,7 @@ def person_graph(
                 id=source_id,
                 label=_entity_label(db, rel.source_entity_type, rel.source_entity_id),
                 type=rel.source_entity_type,
+                data={},
             ),
         )
         nodes.setdefault(
@@ -165,6 +172,7 @@ def person_graph(
                 id=target_id,
                 label=_entity_label(db, rel.target_entity_type, rel.target_entity_id),
                 type=rel.target_entity_type,
+                data={},
             ),
         )
         edges.append(

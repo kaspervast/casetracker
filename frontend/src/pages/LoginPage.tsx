@@ -7,8 +7,8 @@ type Props = {
 };
 
 export function LoginPage({ onLogin }: Props) {
-  const [username, setUsername] = useState("superadmin");
-  const [password, setPassword] = useState("ChangeMe#2026");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 

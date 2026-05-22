@@ -8,7 +8,15 @@ from sqlalchemy.orm import Session
 
 from app.auth.tokens import decode_access_token
 from app.db.session import get_db
-from app.models.core import Case, CaseAssignment, Permission, RolePermission, User
+from app.models.core import (
+    Case,
+    CaseAssignment,
+    CasePersonRole,
+    Permission,
+    Relationship,
+    RolePermission,
+    User,
+)
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
@@ -75,6 +83,86 @@ def accessible_cases_query(db: Session, user: User) -> Select[tuple[Case]]:
     return query.where(Case.id.in_(assigned_case_ids))
 
 
+def accessible_case_ids(db: Session, user: User) -> set[uuid.UUID]:
+    accessible = accessible_cases_query(db, user).subquery()
+    return set(db.scalars(select(accessible.c.id)))
+
+
 def require_case_access(case_id: uuid.UUID, db: Session, user: User) -> None:
     if not can_access_case(db, user, case_id):
         raise HTTPException(status_code=403, detail="Case access denied")
+
+
+def _person_case_ids(db: Session, person_id: uuid.UUID) -> set[uuid.UUID]:
+    return set(
+        db.scalars(
+            select(CasePersonRole.case_id).where(CasePersonRole.person_id == person_id)
+        )
+    )
+
+
+def can_access_person(db: Session, user: User, person_id: uuid.UUID) -> bool:
+    linked_case_ids = _person_case_ids(db, person_id)
+    return bool(linked_case_ids & accessible_case_ids(db, user))
+
+
+def require_person_access(person_id: uuid.UUID, db: Session, user: User) -> None:
+    if not can_access_person(db, user, person_id):
+        raise HTTPException(status_code=403, detail="Person access denied")
+
+
+def require_person_write_access(person_id: uuid.UUID, db: Session, user: User) -> None:
+    linked_case_ids = _person_case_ids(db, person_id)
+    allowed_case_ids = accessible_case_ids(db, user)
+    if not linked_case_ids or not linked_case_ids.issubset(allowed_case_ids):
+        raise HTTPException(status_code=403, detail="Person write access denied")
+
+
+def _asset_case_ids(db: Session, asset_type: str, asset_id: uuid.UUID) -> set[uuid.UUID]:
+    rows = db.scalars(
+        select(Relationship.case_id).where(
+            Relationship.deleted_at.is_(None),
+            Relationship.case_id.is_not(None),
+            (
+                (Relationship.source_entity_type == asset_type)
+                & (Relationship.source_entity_id == asset_id)
+            )
+            | (
+                (Relationship.target_entity_type == asset_type)
+                & (Relationship.target_entity_id == asset_id)
+            ),
+        )
+    )
+    return {case_id for case_id in rows if case_id is not None}
+
+
+def accessible_asset_ids(db: Session, user: User, asset_type: str) -> set[uuid.UUID]:
+    case_ids = accessible_case_ids(db, user)
+    if not case_ids:
+        return set()
+    rows = db.scalars(
+        select(Relationship).where(
+            Relationship.deleted_at.is_(None),
+            Relationship.case_id.in_(case_ids),
+            (Relationship.source_entity_type == asset_type)
+            | (Relationship.target_entity_type == asset_type),
+        )
+    )
+    ids: set[uuid.UUID] = set()
+    for relationship in rows:
+        if relationship.source_entity_type == asset_type:
+            ids.add(relationship.source_entity_id)
+        if relationship.target_entity_type == asset_type:
+            ids.add(relationship.target_entity_id)
+    return ids
+
+
+def require_asset_access(
+    asset_type: str, asset_id: uuid.UUID, db: Session, user: User, *, write: bool = False
+) -> None:
+    linked_case_ids = _asset_case_ids(db, asset_type, asset_id)
+    allowed_case_ids = accessible_case_ids(db, user)
+    if not linked_case_ids or not (linked_case_ids & allowed_case_ids):
+        raise HTTPException(status_code=403, detail="Asset access denied")
+    if write and not linked_case_ids.issubset(allowed_case_ids):
+        raise HTTPException(status_code=403, detail="Asset write access denied")

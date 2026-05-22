@@ -8,6 +8,8 @@ from sqlalchemy.orm import Session
 from app.api.deps import (
     accessible_cases_query,
     get_current_user,
+    require_person_access,
+    require_person_write_access,
     require_case_access,
 )
 from app.db.session import get_db
@@ -17,6 +19,29 @@ from app.schemas.persons import PersonCreate, PersonOut, PersonUpdate
 from app.services.audit import write_audit
 
 router = APIRouter(prefix="/persons", tags=["persons"])
+
+PERSON_UPDATE_FIELDS = {
+    "full_name",
+    "alias_or_nickname",
+    "father_name",
+    "mother_name",
+    "spouse_name",
+    "gender",
+    "date_of_birth",
+    "approximate_age",
+    "occupation",
+    "nationality",
+    "id_document_type",
+    "id_document_number",
+    "notes",
+    "risk_level",
+    "verification_status",
+    "is_absconding",
+    "is_arrested",
+    "arrest_date",
+    "bail_status",
+    "custody_details",
+}
 
 
 def _accessible_person_ids(db: Session, user: User):
@@ -86,6 +111,7 @@ def get_person(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    require_person_access(person_id, db, user)
     person = db.get(Person, person_id)
     if not person or person.deleted_at:
         raise HTTPException(status_code=404, detail="Person not found")
@@ -100,12 +126,14 @@ def update_person(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    require_person_write_access(person_id, db, user)
     person = db.get(Person, person_id)
     if not person or person.deleted_at:
         raise HTTPException(status_code=404, detail="Person not found")
     old = PersonOut.model_validate(person).model_dump(mode="json")
     for key, value in payload.model_dump(exclude_unset=True).items():
-        setattr(person, key, value)
+        if key in PERSON_UPDATE_FIELDS:
+            setattr(person, key, value)
     person.updated_by = user.id
     db.commit()
     db.refresh(person)
@@ -130,6 +158,7 @@ def delete_person(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    require_person_write_access(person_id, db, user)
     person = db.get(Person, person_id)
     if not person or person.deleted_at:
         raise HTTPException(status_code=404, detail="Person not found")

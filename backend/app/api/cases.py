@@ -14,6 +14,30 @@ from app.services.audit import write_audit
 
 router = APIRouter(prefix="/cases", tags=["cases"])
 
+CASE_UPDATE_FIELDS = {
+    "case_number",
+    "police_station",
+    "district",
+    "city",
+    "case_title",
+    "case_type",
+    "primary_legal_act",
+    "sections_acts_applied",
+    "date_of_registration",
+    "pending_limit_days",
+    "incident_datetime",
+    "reporting_datetime",
+    "complainant_summary",
+    "investigating_officer",
+    "supervising_officer",
+    "case_status",
+    "priority",
+    "short_summary",
+    "detailed_case_narrative",
+    "tags",
+    "confidentiality_level",
+}
+
 
 @router.get("", response_model=list[CaseOut])
 def list_cases(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
@@ -79,7 +103,8 @@ def update_case(
         raise HTTPException(status_code=404, detail="Case not found")
     old = CaseOut.model_validate(case).model_dump(mode="json")
     for key, value in payload.model_dump(exclude_unset=True).items():
-        setattr(case, key, value)
+        if key in CASE_UPDATE_FIELDS:
+            setattr(case, key, value)
     case.updated_by = user.id
     db.commit()
     db.refresh(case)

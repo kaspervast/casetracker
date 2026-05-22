@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import assets, audit_logs, auth, cases, dashboard, graph, persons, relationships
 from app.core.config import get_settings
+from app.core.rate_limit import InMemoryRateLimitMiddleware, RateLimitRule
 
 settings = get_settings()
 
@@ -18,6 +19,13 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+)
+app.add_middleware(
+    InMemoryRateLimitMiddleware,
+    rules=[
+        RateLimitRule(prefix="/api/auth/login", limit=10, window_seconds=300),
+        RateLimitRule(prefix="/api/", limit=240, window_seconds=60),
+    ],
 )
 
 app.include_router(auth.router, prefix=settings.api_prefix)

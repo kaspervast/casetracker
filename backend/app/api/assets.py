@@ -5,7 +5,12 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, require_case_access
+from app.api.deps import (
+    accessible_asset_ids,
+    get_current_user,
+    require_asset_access,
+    require_case_access,
+)
 from app.db.session import get_db
 from app.models.core import BankAccount, MobileNumber, Relationship, User
 from app.schemas.cases import DeleteRequest
@@ -21,6 +26,29 @@ from app.services.audit import write_audit
 
 router = APIRouter(tags=["assets"])
 
+MOBILE_UPDATE_FIELDS = {
+    "mobile_number",
+    "country_code",
+    "sim_provider",
+    "subscriber_name",
+    "current_status",
+    "source",
+    "verification_status",
+    "notes",
+}
+
+BANK_ACCOUNT_UPDATE_FIELDS = {
+    "bank_name",
+    "branch_name",
+    "ifsc",
+    "account_number",
+    "account_holder_name",
+    "account_type",
+    "current_status",
+    "freeze_amount",
+    "source",
+    "notes",
+}
 
 def _asset_ids_for_case(db: Session, case_id: uuid.UUID, asset_type: str) -> set[uuid.UUID]:
     rows = db.scalars(
@@ -98,10 +126,16 @@ def list_mobile_numbers(
                 .order_by(MobileNumber.updated_at.desc())
             )
         )
+    asset_ids = accessible_asset_ids(db, user, "mobile_number")
+    if not asset_ids:
+        return []
     return list(
         db.scalars(
             select(MobileNumber)
-            .where(MobileNumber.deleted_at.is_(None))
+            .where(
+                MobileNumber.deleted_at.is_(None),
+                MobileNumber.id.in_(asset_ids),
+            )
             .order_by(MobileNumber.updated_at.desc())
         )
     )
@@ -155,12 +189,14 @@ def update_mobile_number(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    require_asset_access("mobile_number", mobile_id, db, user, write=True)
     mobile = db.get(MobileNumber, mobile_id)
     if not mobile or mobile.deleted_at:
         raise HTTPException(status_code=404, detail="Mobile number not found")
     old = MobileNumberOut.model_validate(mobile).model_dump(mode="json")
     for key, value in payload.model_dump(exclude_unset=True).items():
-        setattr(mobile, key, value)
+        if key in MOBILE_UPDATE_FIELDS:
+            setattr(mobile, key, value)
     mobile.updated_by = user.id
     try:
         db.commit()
@@ -189,6 +225,7 @@ def delete_mobile_number(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    require_asset_access("mobile_number", mobile_id, db, user, write=True)
     mobile = db.get(MobileNumber, mobile_id)
     if not mobile or mobile.deleted_at:
         raise HTTPException(status_code=404, detail="Mobile number not found")
@@ -227,10 +264,16 @@ def list_bank_accounts(
                 .order_by(BankAccount.updated_at.desc())
             )
         )
+    asset_ids = accessible_asset_ids(db, user, "bank_account")
+    if not asset_ids:
+        return []
     return list(
         db.scalars(
             select(BankAccount)
-            .where(BankAccount.deleted_at.is_(None))
+            .where(
+                BankAccount.deleted_at.is_(None),
+                BankAccount.id.in_(asset_ids),
+            )
             .order_by(BankAccount.updated_at.desc())
         )
     )
@@ -284,12 +327,14 @@ def update_bank_account(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    require_asset_access("bank_account", account_id, db, user, write=True)
     account = db.get(BankAccount, account_id)
     if not account or account.deleted_at:
         raise HTTPException(status_code=404, detail="Bank account not found")
     old = BankAccountOut.model_validate(account).model_dump(mode="json")
     for key, value in payload.model_dump(exclude_unset=True).items():
-        setattr(account, key, value)
+        if key in BANK_ACCOUNT_UPDATE_FIELDS:
+            setattr(account, key, value)
     account.updated_by = user.id
     try:
         db.commit()
@@ -318,6 +363,7 @@ def delete_bank_account(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    require_asset_access("bank_account", account_id, db, user, write=True)
     account = db.get(BankAccount, account_id)
     if not account or account.deleted_at:
         raise HTTPException(status_code=404, detail="Bank account not found")

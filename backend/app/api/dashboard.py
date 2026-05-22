@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.api.deps import accessible_cases_query, get_current_user
+from app.api.deps import accessible_asset_ids, accessible_cases_query, get_current_user, has_permission
 from app.db.session import get_db
 from app.models.core import (
     AuditLog,
@@ -28,6 +28,14 @@ def dashboard(db: Session = Depends(get_db), user: User = Depends(get_current_us
     cases_query = accessible_cases_query(db, user)
     cases = list(db.scalars(cases_query))
     accessible_cases = cases_query.subquery()
+    accessible_case_ids = [case.id for case in cases]
+    accessible_person_ids = set(
+        db.scalars(
+            select(CasePersonRole.person_id).where(CasePersonRole.case_id.in_(accessible_case_ids))
+        )
+    )
+    accessible_mobile_ids = accessible_asset_ids(db, user, "mobile_number")
+    accessible_bank_ids = accessible_asset_ids(db, user, "bank_account")
     today = date.today()
     total_cases = len(cases)
     active_cases = sum(1 for case in cases if case.case_status != "Closed")
@@ -36,7 +44,10 @@ def dashboard(db: Session = Depends(get_db), user: User = Depends(get_current_us
         select(func.count()).select_from(CaseAssignment).where(CaseAssignment.user_id == user.id)
     ) or 0
     role_count = lambda role: db.scalar(
-        select(func.count()).select_from(CasePersonRole).where(CasePersonRole.role == role)
+        select(func.count())
+        .select_from(CasePersonRole)
+        .join(accessible_cases, accessible_cases.c.id == CasePersonRole.case_id)
+        .where(CasePersonRole.role == role)
     ) or 0
     status_counts = Counter(case.case_status or "Unknown" for case in cases)
     priority_counts = Counter(case.priority or "Unknown" for case in cases)
@@ -110,28 +121,45 @@ def dashboard(db: Session = Depends(get_db), user: User = Depends(get_current_us
         )
     ) or 0
     recent_cases = sorted(cases, key=lambda case: case.updated_at, reverse=True)[:5]
-    recent_audit = [
-        {
-            "timestamp": audit.timestamp.isoformat(),
-            "username": audit.username,
-            "action": audit.action,
-            "entity_type": audit.entity_type,
-        }
-        for audit in db.scalars(select(AuditLog).order_by(AuditLog.timestamp.desc()).limit(8))
-    ]
+    recent_audit = []
+    if has_permission(db, user, "audit:read"):
+        recent_audit = [
+            {
+                "timestamp": audit.timestamp.isoformat(),
+                "username": audit.username,
+                "action": audit.action,
+                "entity_type": audit.entity_type,
+            }
+            for audit in db.scalars(
+                select(AuditLog)
+                .where(
+                    (AuditLog.case_id.in_(accessible_case_ids))
+                    | (AuditLog.user_id == user.id)
+                )
+                .order_by(AuditLog.timestamp.desc())
+                .limit(8)
+            )
+        ]
     return DashboardSummary(
         total_cases=total_cases,
         active_cases=active_cases,
         closed_cases=closed_cases,
         assigned_cases=assigned_cases,
-        total_persons=db.scalar(select(func.count()).select_from(Person).where(Person.deleted_at.is_(None))) or 0,
+        total_persons=len(accessible_person_ids),
         total_accused=role_count("Accused"),
         total_suspects=role_count("Suspect"),
         total_complainants=role_count("Complainant"),
         total_witnesses=role_count("Witness"),
-        total_mobile_numbers=db.scalar(select(func.count()).select_from(MobileNumber).where(MobileNumber.deleted_at.is_(None))) or 0,
-        total_bank_accounts=db.scalar(select(func.count()).select_from(BankAccount).where(BankAccount.deleted_at.is_(None))) or 0,
-        total_evidence_items=db.scalar(select(func.count()).select_from(EvidenceItem).where(EvidenceItem.deleted_at.is_(None))) or 0,
+        total_mobile_numbers=len(accessible_mobile_ids),
+        total_bank_accounts=len(accessible_bank_ids),
+        total_evidence_items=db.scalar(
+            select(func.count())
+            .select_from(EvidenceItem)
+            .where(
+                EvidenceItem.deleted_at.is_(None),
+                EvidenceItem.linked_case_id.in_(accessible_case_ids),
+            )
+        ) or 0,
         cases_by_status=[
             {"label": label, "value": value}
             for label, value in status_counts.most_common()
