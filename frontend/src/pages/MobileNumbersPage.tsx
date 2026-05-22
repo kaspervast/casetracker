@@ -1,15 +1,27 @@
 import { FormEvent, useEffect, useState } from "react";
-import { createMobileNumber, deleteMobileNumber, listCases, listMobileNumbers, updateMobileNumber } from "../api/casegraph";
-import type { CaseRecord, MobileNumberRecord } from "../types/api";
+import {
+  createMobileNumber,
+  createRelationship,
+  deleteMobileNumber,
+  listCases,
+  listMobileNumbers,
+  listPersons,
+  listRelationships,
+  updateMobileNumber
+} from "../api/casegraph";
+import type { CaseRecord, MobileNumberRecord, PersonRecord, RelationshipRecord } from "../types/api";
 import { moveById } from "../utils/reorder";
 
 export function MobileNumbersPage() {
   const [cases, setCases] = useState<CaseRecord[]>([]);
   const [selectedCaseId, setSelectedCaseId] = useState("");
+  const [persons, setPersons] = useState<PersonRecord[]>([]);
+  const [relationships, setRelationships] = useState<RelationshipRecord[]>([]);
   const [mobiles, setMobiles] = useState<MobileNumberRecord[]>([]);
   const [mobileNumber, setMobileNumber] = useState("");
   const [subscriberName, setSubscriberName] = useState("");
   const [provider, setProvider] = useState("");
+  const [linkedPersonId, setLinkedPersonId] = useState("");
   const [error, setError] = useState("");
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [editing, setEditing] = useState<MobileNumberRecord | null>(null);
@@ -23,10 +35,19 @@ export function MobileNumbersPage() {
 
   async function load(caseId: string) {
     if (!caseId) {
+      setPersons([]);
+      setRelationships([]);
       setMobiles([]);
       return;
     }
-    setMobiles(await listMobileNumbers(caseId));
+    const [nextMobiles, nextPersons, nextRelationships] = await Promise.all([
+      listMobileNumbers(caseId),
+      listPersons(caseId),
+      listRelationships(caseId)
+    ]);
+    setMobiles(nextMobiles);
+    setPersons(nextPersons);
+    setRelationships(nextRelationships);
   }
 
   useEffect(() => {
@@ -45,7 +66,7 @@ export function MobileNumbersPage() {
     }
     setError("");
     try {
-      await createMobileNumber({
+      const created = await createMobileNumber({
         case_id: selectedCaseId,
         mobile_number: mobileNumber,
         country_code: "+91",
@@ -54,9 +75,22 @@ export function MobileNumbersPage() {
         current_status: "Unknown",
         source: "Manual entry"
       });
+      if (linkedPersonId) {
+        await createRelationship({
+          source_entity_type: "person",
+          source_entity_id: linkedPersonId,
+          target_entity_type: "mobile_number",
+          target_entity_id: created.id,
+          relationship_type: "HAS_MOBILE",
+          confidence: "Confirmed",
+          source_of_relationship: "Manual",
+          case_id: selectedCaseId
+        });
+      }
       setMobileNumber("");
       setSubscriberName("");
       setProvider("");
+      setLinkedPersonId("");
       await load(selectedCaseId);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Mobile number creation failed");
@@ -118,6 +152,18 @@ export function MobileNumbersPage() {
     setDraggedId(null);
   }
 
+  function linkedPerson(mobileId: string) {
+    const relationship = relationships.find(
+      (item) =>
+        item.relationship_type === "HAS_MOBILE" &&
+        item.target_entity_type === "mobile_number" &&
+        item.target_entity_id === mobileId &&
+        item.source_entity_type === "person"
+    );
+    if (!relationship) return null;
+    return persons.find((item) => item.id === relationship.source_entity_id) ?? null;
+  }
+
   return (
     <section className="stack">
       <div className="context-toolbar">
@@ -134,6 +180,24 @@ export function MobileNumbersPage() {
       </div>
       <form className="inline-form" onSubmit={submit}>
         <input placeholder="Mobile number" value={mobileNumber} onChange={(event) => setMobileNumber(event.target.value)} />
+        <select
+          value={linkedPersonId}
+          onChange={(event) => {
+            const nextPersonId = event.target.value;
+            setLinkedPersonId(nextPersonId);
+            const person = persons.find((item) => item.id === nextPersonId);
+            if (person && !subscriberName) {
+              setSubscriberName(person.full_name);
+            }
+          }}
+        >
+          <option value="">Link to person / accused</option>
+          {persons.map((person) => (
+            <option key={person.id} value={person.id}>
+              {person.full_name}{person.case_role ? ` (${person.case_role})` : ""}
+            </option>
+          ))}
+        </select>
         <input placeholder="Subscriber name" value={subscriberName} onChange={(event) => setSubscriberName(event.target.value)} />
         <input placeholder="SIM provider" value={provider} onChange={(event) => setProvider(event.target.value)} />
         <button className="primary" disabled={!selectedCaseId}>Create Mobile Number</button>
@@ -159,7 +223,9 @@ export function MobileNumbersPage() {
       )}
       {error && <div className="error">{error}</div>}
       <div className="records">
-        {mobiles.map((mobile) => (
+        {mobiles.map((mobile) => {
+          const person = linkedPerson(mobile.id);
+          return (
           <article
             className="record draggable-record"
             draggable
@@ -173,10 +239,12 @@ export function MobileNumbersPage() {
               <strong>{mobile.country_code} {mobile.mobile_number}</strong>
               <h2>{mobile.subscriber_name ?? "Unknown subscriber"}</h2>
               <p>{mobile.sim_provider ?? "Provider not recorded"}</p>
+              {person && <p>Linked person: {person.full_name}{person.case_role ? ` (${person.case_role})` : ""}</p>}
             </div>
             <div className="badges">
               <span className="badge">{mobile.current_status}</span>
               <span className="badge">{mobile.verification_status}</span>
+              {person?.case_role && <span className="badge">{person.case_role}</span>}
               <button className="secondary-button" type="button" onClick={() => startEdit(mobile)}>
                 Edit
               </button>
@@ -185,7 +253,8 @@ export function MobileNumbersPage() {
               </button>
             </div>
           </article>
-        ))}
+          );
+        })}
         {!mobiles.length && <div className="empty">No mobile numbers linked to the selected case.</div>}
       </div>
     </section>

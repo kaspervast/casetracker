@@ -7,7 +7,8 @@ import type {
   DashboardSummary,
   GraphResponse,
   MobileNumberRecord,
-  PersonRecord
+  PersonRecord,
+  RelationshipRecord
 } from "../types/api";
 
 export function login(username: string, password: string) {
@@ -121,6 +122,17 @@ export function deleteBankAccount(accountId: string, deleteReason: string) {
   return api<{ ok: boolean }>(`/bank-accounts/${accountId}`, {
     method: "DELETE",
     body: JSON.stringify({ delete_reason: deleteReason })
+  });
+}
+
+export function listRelationships(caseId?: string) {
+  return api<RelationshipRecord[]>(withCaseId("/relationships", caseId));
+}
+
+export function createRelationship(payload: Record<string, unknown>) {
+  return api<RelationshipRecord>("/relationships", {
+    method: "POST",
+    body: JSON.stringify(payload)
   });
 }
 

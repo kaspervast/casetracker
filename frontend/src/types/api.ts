@@ -140,3 +140,18 @@ export type AuditLog = {
   success: boolean;
   failure_reason?: string | null;
 };
+
+export type RelationshipRecord = {
+  id: string;
+  source_entity_type: string;
+  source_entity_id: string;
+  target_entity_type: string;
+  target_entity_id: string;
+  relationship_type: string;
+  confidence: string;
+  source_of_relationship: string;
+  case_id?: string | null;
+  notes?: string | null;
+  created_at: string;
+  updated_at: string;
+};
