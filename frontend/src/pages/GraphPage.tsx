@@ -5,7 +5,7 @@ import am5themes_Animated from "@amcharts/amcharts5/themes/Animated";
 import { caseGraph, listCases } from "../api/casegraph";
 import type { CaseRecord, GraphEdge, GraphNode, GraphResponse } from "../types/api";
 
-type LayoutMode = "force" | "top-down" | "left-right" | "clustered";
+type LayoutMode = "force" | "force-bullets" | "top-down" | "left-right" | "clustered";
 
 type ChartNode = {
   id: string;
@@ -27,6 +27,7 @@ const colors: Record<string, number> = {
 
 const layoutLabels: Record<LayoutMode, string> = {
   force: "Zoomable force tree",
+  "force-bullets": "Animated link bullets",
   "top-down": "Top down tree",
   "left-right": "Left-right tree",
   clustered: "Clustered hierarchy"
@@ -115,6 +116,7 @@ function buildTreeData(graph: GraphResponse): ChartNode[] {
 }
 
 function describeLayout(layout: LayoutMode) {
+  if (layout === "force-bullets") return "Force-directed graph with animated bullets traveling along relationship links.";
   if (layout === "top-down") return "Tree layout with orthogonal/angular parent-child edges.";
   if (layout === "left-right") return "Horizontal hierarchy for wide investigations.";
   if (layout === "clustered") return "Clustered hierarchy keeps leaf nodes aligned by depth.";
@@ -166,6 +168,35 @@ function configureSeries(series: am5hierarchy.LinkedHierarchy, graph: GraphRespo
     const chartNode = event.target.dataItem?.dataContext as ChartNode | undefined;
     const graphNode = findGraphNode(graph, chartNode);
     if (graphNode) onSelect(graphNode);
+  });
+}
+
+function addAnimatedLinkBullets(root: am5.Root, series: am5hierarchy.LinkedHierarchy) {
+  series.linkBullets.push((_root, source, target) => {
+    const sourceNode = source.dataContext as ChartNode | undefined;
+    const targetNode = target.dataContext as ChartNode | undefined;
+    const sourceColor = am5.color(colors[sourceNode?.entityType ?? ""] ?? 0x0f766e);
+    const bullet = am5.Bullet.new(root, {
+      locationX: 0,
+      sprite: am5.Circle.new(root, {
+        radius: 4,
+        fill: sourceColor,
+        stroke: am5.color(0xffffff),
+        strokeWidth: 1,
+        tooltipText: `${sourceNode?.name ?? "Source"} -> ${targetNode?.name ?? "Target"}`
+      })
+    });
+
+    bullet.animate({
+      key: "locationX",
+      from: 0,
+      to: 1,
+      duration: 1800 + Math.round(Math.random() * 1400),
+      loops: Infinity,
+      easing: am5.ease.linear
+    });
+
+    return bullet;
   });
 }
 
@@ -235,7 +266,7 @@ export function GraphPage() {
     };
 
     let series: am5hierarchy.LinkedHierarchy;
-    if (layout === "force") {
+    if (layout === "force" || layout === "force-bullets") {
       series = zoomable.contents.children.push(
         am5hierarchy.ForceDirected.new(root, {
           ...commonSettings,
@@ -249,6 +280,9 @@ export function GraphPage() {
           initialFrames: 220
         })
       );
+      if (layout === "force-bullets") {
+        addAnimatedLinkBullets(root, series);
+      }
       series.data.setAll(buildForceData(graph));
     } else {
       series = zoomable.contents.children.push(
