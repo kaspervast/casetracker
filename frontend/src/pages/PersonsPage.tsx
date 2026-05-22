@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
-import { createPerson, listPersons } from "../api/casegraph";
+import { createPerson, deletePerson, listPersons } from "../api/casegraph";
 import type { PersonRecord } from "../types/api";
 
 export function PersonsPage() {
@@ -29,6 +29,18 @@ export function PersonsPage() {
     }
   }
 
+  async function removePerson(person: PersonRecord) {
+    const reason = window.prompt(`Reason for deleting person ${person.full_name}`);
+    if (!reason?.trim()) return;
+    setError("");
+    try {
+      await deletePerson(person.id, reason.trim());
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Person delete failed");
+    }
+  }
+
   return (
     <section className="stack">
       <form className="inline-form" onSubmit={submit}>
@@ -48,6 +60,9 @@ export function PersonsPage() {
               <span className="badge">{person.risk_level}</span>
               <span className="badge">{person.verification_status}</span>
               {person.is_arrested && <span className="badge danger">Arrested</span>}
+              <button className="danger-button" type="button" onClick={() => removePerson(person)}>
+                Delete
+              </button>
             </div>
           </article>
         ))}

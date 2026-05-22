@@ -27,6 +27,18 @@ button {
   padding: 10px 14px;
 }
 
+.danger-button {
+  background: #fff1f2;
+  border-color: #fecdd3;
+  color: #be123c;
+  padding: 6px 10px;
+}
+
+.danger-button:hover {
+  background: #ffe4e6;
+  border-color: #fda4af;
+}
+
 input,
 select {
   border: 1px solid #cbd5e1;

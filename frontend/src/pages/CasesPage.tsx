@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
-import { createCase, listCases } from "../api/casegraph";
+import { createCase, deleteCase, listCases } from "../api/casegraph";
 import type { CaseRecord } from "../types/api";
 
 export function CasesPage() {
@@ -35,6 +35,18 @@ export function CasesPage() {
     }
   }
 
+  async function removeCase(item: CaseRecord) {
+    const reason = window.prompt(`Reason for deleting case ${item.case_number}`);
+    if (!reason?.trim()) return;
+    setError("");
+    try {
+      await deleteCase(item.id, reason.trim());
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Case delete failed");
+    }
+  }
+
   return (
     <section className="stack">
       <form className="inline-form" onSubmit={submit}>
@@ -55,6 +67,9 @@ export function CasesPage() {
               <span className="badge">{item.case_status}</span>
               <span className="badge">{item.priority}</span>
               <span className="badge">{item.confidentiality_level}</span>
+              <button className="danger-button" type="button" onClick={() => removeCase(item)}>
+                Delete
+              </button>
             </div>
           </article>
         ))}

@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
-import { createMobileNumber, listMobileNumbers } from "../api/casegraph";
+import { createMobileNumber, deleteMobileNumber, listMobileNumbers } from "../api/casegraph";
 import type { MobileNumberRecord } from "../types/api";
 
 export function MobileNumbersPage() {
@@ -38,6 +38,18 @@ export function MobileNumbersPage() {
     }
   }
 
+  async function removeMobile(mobile: MobileNumberRecord) {
+    const reason = window.prompt(`Reason for deleting mobile number ${mobile.mobile_number}`);
+    if (!reason?.trim()) return;
+    setError("");
+    try {
+      await deleteMobileNumber(mobile.id, reason.trim());
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Mobile number delete failed");
+    }
+  }
+
   return (
     <section className="stack">
       <form className="inline-form" onSubmit={submit}>
@@ -58,6 +70,9 @@ export function MobileNumbersPage() {
             <div className="badges">
               <span className="badge">{mobile.current_status}</span>
               <span className="badge">{mobile.verification_status}</span>
+              <button className="danger-button" type="button" onClick={() => removeMobile(mobile)}>
+                Delete
+              </button>
             </div>
           </article>
         ))}

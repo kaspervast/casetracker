@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
-import { createBankAccount, listBankAccounts } from "../api/casegraph";
+import { createBankAccount, deleteBankAccount, listBankAccounts } from "../api/casegraph";
 import type { BankAccountRecord } from "../types/api";
 
 export function BankAccountsPage() {
@@ -40,6 +40,18 @@ export function BankAccountsPage() {
     }
   }
 
+  async function removeAccount(account: BankAccountRecord) {
+    const reason = window.prompt(`Reason for deleting bank account ${account.account_number}`);
+    if (!reason?.trim()) return;
+    setError("");
+    try {
+      await deleteBankAccount(account.id, reason.trim());
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Bank account delete failed");
+    }
+  }
+
   return (
     <section className="stack">
       <form className="inline-form" onSubmit={submit}>
@@ -61,6 +73,9 @@ export function BankAccountsPage() {
             <div className="badges">
               <span className="badge">{account.current_status}</span>
               <span className="badge">{account.source ?? "Manual entry"}</span>
+              <button className="danger-button" type="button" onClick={() => removeAccount(account)}>
+                Delete
+              </button>
             </div>
           </article>
         ))}

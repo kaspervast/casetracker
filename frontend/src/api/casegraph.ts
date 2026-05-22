@@ -33,12 +33,26 @@ export function createCase(payload: Partial<CaseRecord>) {
   return api<CaseRecord>("/cases", { method: "POST", body: JSON.stringify(payload) });
 }
 
+export function deleteCase(caseId: string, deleteReason: string) {
+  return api<{ ok: boolean }>(`/cases/${caseId}`, {
+    method: "DELETE",
+    body: JSON.stringify({ delete_reason: deleteReason })
+  });
+}
+
 export function listPersons() {
   return api<PersonRecord[]>("/persons");
 }
 
 export function createPerson(payload: Record<string, unknown>) {
   return api<PersonRecord>("/persons", { method: "POST", body: JSON.stringify(payload) });
+}
+
+export function deletePerson(personId: string, deleteReason: string) {
+  return api<{ ok: boolean }>(`/persons/${personId}`, {
+    method: "DELETE",
+    body: JSON.stringify({ delete_reason: deleteReason })
+  });
 }
 
 export function listMobileNumbers() {
@@ -52,6 +66,13 @@ export function createMobileNumber(payload: Record<string, unknown>) {
   });
 }
 
+export function deleteMobileNumber(mobileId: string, deleteReason: string) {
+  return api<{ ok: boolean }>(`/mobile-numbers/${mobileId}`, {
+    method: "DELETE",
+    body: JSON.stringify({ delete_reason: deleteReason })
+  });
+}
+
 export function listBankAccounts() {
   return api<BankAccountRecord[]>("/bank-accounts");
 }
@@ -60,6 +81,13 @@ export function createBankAccount(payload: Record<string, unknown>) {
   return api<BankAccountRecord>("/bank-accounts", {
     method: "POST",
     body: JSON.stringify(payload)
+  });
+}
+
+export function deleteBankAccount(accountId: string, deleteReason: string) {
+  return api<{ ok: boolean }>(`/bank-accounts/${accountId}`, {
+    method: "DELETE",
+    body: JSON.stringify({ delete_reason: deleteReason })
   });
 }
 
