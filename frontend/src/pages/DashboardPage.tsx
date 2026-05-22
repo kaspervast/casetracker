@@ -13,6 +13,44 @@ function total(items: ChartDatum[]) {
   return items.reduce((sum, item) => sum + item.value, 0);
 }
 
+function countBy(items: string[]) {
+  return Object.entries(
+    items.reduce<Record<string, number>>((counts, label) => {
+      counts[label] = (counts[label] ?? 0) + 1;
+      return counts;
+    }, {})
+  ).map(([label, value]) => ({ label, value }));
+}
+
+function pendingAgeFromRecentCases(cases: DashboardSummary["recent_cases"]) {
+  const buckets: Record<string, number> = {
+    "0-30 days": 0,
+    "31-45 days": 0,
+    "46-60 days": 0,
+    "61-90 days": 0,
+    "90+ days": 0,
+    "No FIR date": 0
+  };
+  for (const item of cases) {
+    if (!item.date_of_registration) {
+      buckets["No FIR date"] += 1;
+      continue;
+    }
+    const filedAt = new Date(`${item.date_of_registration}T00:00:00`);
+    if (Number.isNaN(filedAt.getTime())) {
+      buckets["No FIR date"] += 1;
+      continue;
+    }
+    const days = Math.max(0, Math.floor((Date.now() - filedAt.getTime()) / 86_400_000));
+    if (days <= 30) buckets["0-30 days"] += 1;
+    else if (days <= 45) buckets["31-45 days"] += 1;
+    else if (days <= 60) buckets["46-60 days"] += 1;
+    else if (days <= 90) buckets["61-90 days"] += 1;
+    else buckets["90+ days"] += 1;
+  }
+  return Object.entries(buckets).map(([label, value]) => ({ label, value }));
+}
+
 function BarChartCard({ title, items }: { title: string; items: ChartDatum[] }) {
   const max = Math.max(1, ...items.map((item) => item.value));
   return (
@@ -84,6 +122,14 @@ export function DashboardPage({ onNavigate }: Props) {
   if (error) return <div className="error">{error}</div>;
   if (!data) return <div className="empty">Loading dashboard...</div>;
 
+  const casesByStatus = data.cases_by_status ?? [
+    { label: "Active", value: data.active_cases },
+    { label: "Closed", value: data.closed_cases }
+  ];
+  const casesByPriority = data.cases_by_priority ?? countBy(data.recent_cases.map((item) => item.priority));
+  const casesByPendingAge = data.cases_by_pending_age ?? pendingAgeFromRecentCases(data.recent_cases);
+  const accusedArrestStatus = data.accused_arrest_status ?? [{ label: "Accused", value: data.total_accused }];
+
   const stats = [
     ["Total cases", data.total_cases],
     ["Active cases", data.active_cases],
@@ -116,10 +162,10 @@ export function DashboardPage({ onNavigate }: Props) {
         ))}
       </div>
       <div className="charts-grid">
-        <BarChartCard title="Cases By Status" items={data.cases_by_status} />
-        <BarChartCard title="Cases By Priority" items={data.cases_by_priority} />
-        <BarChartCard title="Pending Since FIR Filed" items={data.cases_by_pending_age} />
-        <DonutChartCard title="Accused Arrest Status" items={data.accused_arrest_status} />
+        <BarChartCard title="Cases By Status" items={casesByStatus} />
+        <BarChartCard title="Cases By Priority" items={casesByPriority} />
+        <BarChartCard title="Pending Since FIR Filed" items={casesByPendingAge} />
+        <DonutChartCard title="Accused Arrest Status" items={accusedArrestStatus} />
       </div>
       <div className="two-column">
         <section>

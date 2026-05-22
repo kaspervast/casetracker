@@ -87,10 +87,10 @@ export type DashboardSummary = {
   total_mobile_numbers: number;
   total_bank_accounts: number;
   total_evidence_items: number;
-  cases_by_status: ChartDatum[];
-  cases_by_priority: ChartDatum[];
-  cases_by_pending_age: ChartDatum[];
-  accused_arrest_status: ChartDatum[];
+  cases_by_status?: ChartDatum[];
+  cases_by_priority?: ChartDatum[];
+  cases_by_pending_age?: ChartDatum[];
+  accused_arrest_status?: ChartDatum[];
   recent_cases: CaseRecord[];
   recent_audit_activity: Array<Record<string, string | null>>;
 };
