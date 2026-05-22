@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
-import { createMobileNumber, deleteMobileNumber, listMobileNumbers } from "../api/casegraph";
+import { createMobileNumber, deleteMobileNumber, listMobileNumbers, updateMobileNumber } from "../api/casegraph";
 import type { MobileNumberRecord } from "../types/api";
+import { moveById } from "../utils/reorder";
 
 export function MobileNumbersPage() {
   const [mobiles, setMobiles] = useState<MobileNumberRecord[]>([]);
@@ -8,6 +9,7 @@ export function MobileNumbersPage() {
   const [subscriberName, setSubscriberName] = useState("");
   const [provider, setProvider] = useState("");
   const [error, setError] = useState("");
+  const [draggedId, setDraggedId] = useState<string | null>(null);
 
   async function load() {
     setMobiles(await listMobileNumbers());
@@ -50,6 +52,35 @@ export function MobileNumbersPage() {
     }
   }
 
+  async function editMobile(mobile: MobileNumberRecord) {
+    const mobileNumber = window.prompt("Mobile number", mobile.mobile_number);
+    if (mobileNumber === null) return;
+    const subscriber = window.prompt("Subscriber name", mobile.subscriber_name ?? "");
+    if (subscriber === null) return;
+    const provider = window.prompt("SIM provider", mobile.sim_provider ?? "");
+    if (provider === null) return;
+    const status = window.prompt("Current status", mobile.current_status);
+    if (status === null) return;
+    setError("");
+    try {
+      await updateMobileNumber(mobile.id, {
+        mobile_number: mobileNumber.trim(),
+        subscriber_name: subscriber.trim() || null,
+        sim_provider: provider.trim() || null,
+        current_status: status.trim()
+      });
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Mobile number update failed");
+    }
+  }
+
+  function dropOn(targetId: string) {
+    if (!draggedId) return;
+    setMobiles((items) => moveById(items, draggedId, targetId));
+    setDraggedId(null);
+  }
+
   return (
     <section className="stack">
       <form className="inline-form" onSubmit={submit}>
@@ -61,8 +92,16 @@ export function MobileNumbersPage() {
       {error && <div className="error">{error}</div>}
       <div className="records">
         {mobiles.map((mobile) => (
-          <article className="record" key={mobile.id}>
+          <article
+            className="record draggable-record"
+            draggable
+            key={mobile.id}
+            onDragStart={() => setDraggedId(mobile.id)}
+            onDragOver={(event) => event.preventDefault()}
+            onDrop={() => dropOn(mobile.id)}
+          >
             <div>
+              <span className="drag-handle">Drag to reorder</span>
               <strong>{mobile.country_code} {mobile.mobile_number}</strong>
               <h2>{mobile.subscriber_name ?? "Unknown subscriber"}</h2>
               <p>{mobile.sim_provider ?? "Provider not recorded"}</p>
@@ -70,6 +109,9 @@ export function MobileNumbersPage() {
             <div className="badges">
               <span className="badge">{mobile.current_status}</span>
               <span className="badge">{mobile.verification_status}</span>
+              <button className="secondary-button" type="button" onClick={() => editMobile(mobile)}>
+                Edit
+              </button>
               <button className="danger-button" type="button" onClick={() => removeMobile(mobile)}>
                 Delete
               </button>

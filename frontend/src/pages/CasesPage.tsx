@@ -1,12 +1,14 @@
 import { FormEvent, useEffect, useState } from "react";
-import { createCase, deleteCase, listCases } from "../api/casegraph";
+import { createCase, deleteCase, listCases, updateCase } from "../api/casegraph";
 import type { CaseRecord } from "../types/api";
+import { moveById } from "../utils/reorder";
 
 export function CasesPage() {
   const [cases, setCases] = useState<CaseRecord[]>([]);
   const [caseNumber, setCaseNumber] = useState("");
   const [caseTitle, setCaseTitle] = useState("");
   const [error, setError] = useState("");
+  const [draggedId, setDraggedId] = useState<string | null>(null);
 
   async function load() {
     setCases(await listCases());
@@ -47,6 +49,35 @@ export function CasesPage() {
     }
   }
 
+  async function editCase(item: CaseRecord) {
+    const caseNumber = window.prompt("FIR/CR number", item.case_number);
+    if (caseNumber === null) return;
+    const caseTitle = window.prompt("Case title", item.case_title);
+    if (caseTitle === null) return;
+    const priority = window.prompt("Priority", item.priority);
+    if (priority === null) return;
+    const caseStatus = window.prompt("Status", item.case_status);
+    if (caseStatus === null) return;
+    setError("");
+    try {
+      await updateCase(item.id, {
+        case_number: caseNumber.trim(),
+        case_title: caseTitle.trim(),
+        priority: priority.trim(),
+        case_status: caseStatus.trim()
+      });
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Case update failed");
+    }
+  }
+
+  function dropOn(targetId: string) {
+    if (!draggedId) return;
+    setCases((items) => moveById(items, draggedId, targetId));
+    setDraggedId(null);
+  }
+
   return (
     <section className="stack">
       <form className="inline-form" onSubmit={submit}>
@@ -57,8 +88,16 @@ export function CasesPage() {
       {error && <div className="error">{error}</div>}
       <div className="records">
         {cases.map((item) => (
-          <article className="record" key={item.id}>
+          <article
+            className="record draggable-record"
+            draggable
+            key={item.id}
+            onDragStart={() => setDraggedId(item.id)}
+            onDragOver={(event) => event.preventDefault()}
+            onDrop={() => dropOn(item.id)}
+          >
             <div>
+              <span className="drag-handle">Drag to reorder</span>
               <strong>{item.case_number}</strong>
               <h2>{item.case_title}</h2>
               <p>{item.short_summary ?? "No summary recorded."}</p>
@@ -67,6 +106,9 @@ export function CasesPage() {
               <span className="badge">{item.case_status}</span>
               <span className="badge">{item.priority}</span>
               <span className="badge">{item.confidentiality_level}</span>
+              <button className="secondary-button" type="button" onClick={() => editCase(item)}>
+                Edit
+              </button>
               <button className="danger-button" type="button" onClick={() => removeCase(item)}>
                 Delete
               </button>

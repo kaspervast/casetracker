@@ -19,6 +19,17 @@ class MobileNumberCreate(MobileNumberBase):
     pass
 
 
+class MobileNumberUpdate(BaseModel):
+    mobile_number: str | None = Field(default=None, min_length=5, max_length=30)
+    country_code: str | None = None
+    sim_provider: str | None = None
+    subscriber_name: str | None = None
+    current_status: str | None = None
+    source: str | None = None
+    verification_status: str | None = None
+    notes: str | None = None
+
+
 class MobileNumberOut(MobileNumberBase):
     id: uuid.UUID
     created_at: datetime
@@ -42,6 +53,19 @@ class BankAccountBase(BaseModel):
 
 class BankAccountCreate(BankAccountBase):
     pass
+
+
+class BankAccountUpdate(BaseModel):
+    bank_name: str | None = None
+    branch_name: str | None = None
+    ifsc: str | None = None
+    account_number: str | None = Field(default=None, min_length=4, max_length=60)
+    account_holder_name: str | None = None
+    account_type: str | None = None
+    current_status: str | None = None
+    freeze_amount: float | None = None
+    source: str | None = None
+    notes: str | None = None
 
 
 class BankAccountOut(BankAccountBase):

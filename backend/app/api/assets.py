@@ -12,8 +12,10 @@ from app.schemas.cases import DeleteRequest
 from app.schemas.assets import (
     BankAccountCreate,
     BankAccountOut,
+    BankAccountUpdate,
     MobileNumberCreate,
     MobileNumberOut,
+    MobileNumberUpdate,
 )
 from app.services.audit import write_audit
 
@@ -55,6 +57,40 @@ def create_mobile_number(
         user=user,
         entity_type="mobile_number",
         entity_id=mobile.id,
+        new_value=MobileNumberOut.model_validate(mobile).model_dump(mode="json"),
+    )
+    return mobile
+
+
+@router.put("/mobile-numbers/{mobile_id}", response_model=MobileNumberOut)
+def update_mobile_number(
+    mobile_id: uuid.UUID,
+    payload: MobileNumberUpdate,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    mobile = db.get(MobileNumber, mobile_id)
+    if not mobile or mobile.deleted_at:
+        raise HTTPException(status_code=404, detail="Mobile number not found")
+    old = MobileNumberOut.model_validate(mobile).model_dump(mode="json")
+    for key, value in payload.model_dump(exclude_unset=True).items():
+        setattr(mobile, key, value)
+    mobile.updated_by = user.id
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Mobile number already exists") from exc
+    db.refresh(mobile)
+    write_audit(
+        db,
+        action="MOBILE_NUMBER_UPDATED",
+        request=request,
+        user=user,
+        entity_type="mobile_number",
+        entity_id=mobile.id,
+        old_value=old,
         new_value=MobileNumberOut.model_validate(mobile).model_dump(mode="json"),
     )
     return mobile
@@ -121,6 +157,40 @@ def create_bank_account(
         user=user,
         entity_type="bank_account",
         entity_id=account.id,
+        new_value=BankAccountOut.model_validate(account).model_dump(mode="json"),
+    )
+    return account
+
+
+@router.put("/bank-accounts/{account_id}", response_model=BankAccountOut)
+def update_bank_account(
+    account_id: uuid.UUID,
+    payload: BankAccountUpdate,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    account = db.get(BankAccount, account_id)
+    if not account or account.deleted_at:
+        raise HTTPException(status_code=404, detail="Bank account not found")
+    old = BankAccountOut.model_validate(account).model_dump(mode="json")
+    for key, value in payload.model_dump(exclude_unset=True).items():
+        setattr(account, key, value)
+    account.updated_by = user.id
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Bank account already exists") from exc
+    db.refresh(account)
+    write_audit(
+        db,
+        action="BANK_ACCOUNT_UPDATED",
+        request=request,
+        user=user,
+        entity_type="bank_account",
+        entity_id=account.id,
+        old_value=old,
         new_value=BankAccountOut.model_validate(account).model_dump(mode="json"),
     )
     return account

@@ -34,6 +34,17 @@ button {
   padding: 6px 10px;
 }
 
+.secondary-button {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #334155;
+  padding: 6px 10px;
+}
+
+.secondary-button:hover {
+  background: #e2e8f0;
+}
+
 .danger-button:hover {
   background: #ffe4e6;
   border-color: #fda4af;
@@ -259,6 +270,25 @@ p {
   gap: 16px;
   justify-content: space-between;
   padding: 16px;
+}
+
+.draggable-record {
+  cursor: grab;
+}
+
+.draggable-record:active {
+  cursor: grabbing;
+}
+
+.draggable-record:hover {
+  border-color: #94a3b8;
+}
+
+.drag-handle {
+  color: #64748b;
+  display: block;
+  font-size: 12px;
+  margin-bottom: 6px;
 }
 
 .record h2 {
